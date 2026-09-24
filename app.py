@@ -15,7 +15,6 @@ from src.metrics import calculate_marketplace_kpis, compare_baseline_vs_optimize
 # Page Configuration
 st.set_page_config(
     page_title="Peak Hour Surge Control Engine",
-    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -31,7 +30,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Header Section
-st.markdown("<div class='main-header'>⚡ Urban Mobility Dynamic Surge Pricing & Supply Allocation Engine</div>", unsafe_allow_html=True)
+st.markdown("<div class='main-header'>Urban Mobility Dynamic Surge Pricing & Supply Allocation Engine</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-header'>Real-Time Geospatial Hotspot Detection, Price Elasticity Optimization & 2-Sided Marketplace Control Room</div>", unsafe_allow_html=True)
 
 # Cached Dataset Generation
@@ -42,7 +41,7 @@ def load_cached_data():
 df_all = load_cached_data()
 
 # Sidebar Control Panel
-st.sidebar.header("🎛️ Control Room Parameters")
+st.sidebar.header("Control Room Parameters")
 
 selected_hour = st.sidebar.slider("Select Hour of Day (0-23)", 0, 23, 18, help="Peak hours: 8 AM, 18 PM")
 weather_override = st.sidebar.selectbox("Weather Condition", ["Default API Weather", "Clear (0.0mm)", "Moderate Rain (3.5mm)", "Heavy Storm (8.0mm)"])
@@ -93,10 +92,10 @@ st.markdown("---")
 
 # Main Navigation Tabs
 tab1, tab2, tab3, tab4 = st.tabs([
-    "🗺️ Live Geospatial Control Room", 
-    "📈 Price Elasticity & Surge Simulator", 
-    "📊 Executive KPIs & Unit Economics", 
-    "🔮 Demand Forecast & Hotspot Analytics"
+    "Live Geospatial Control Room", 
+    "Price Elasticity & Surge Simulator", 
+    "Executive KPIs & Unit Economics", 
+    "Demand Forecast & Hotspot Analytics"
 ])
 
 # TAB 1: Live Geospatial Control Room
@@ -131,7 +130,7 @@ with tab1:
         st_folium(nyc_map, width=800, height=480)
         
     with col_details:
-        st.write("### 📍 Active Hotspots Summary")
+        st.write("### Active Hotspots Summary")
         if not cluster_summary.empty:
             disp_df = cluster_summary[['cluster_id', 'primary_zone', 'request_count', 'cancellation_rate']].copy()
             disp_df.columns = ['ID', 'Zone', 'Requests', 'Churn Rate']
@@ -140,10 +139,10 @@ with tab1:
         else:
             st.info("No dense clusters detected for this hour slice. Demand is evenly distributed.")
             
-        st.write("### 🌦️ Environment Status")
-        st.info(f"**Precipitation:** {df_filtered['precipitation_mm'].mean():.1f} mm/hr\n\n"
-                f"**Avg Temperature:** {df_filtered['temperature_c'].mean():.1f} °C\n\n"
-                f"**Active Fleet Drivers:** {df_filtered['hourly_active_drivers'].mean():.0f} drivers")
+        st.write("### Environment Status")
+        st.info(f"Precipitation: {df_filtered['precipitation_mm'].mean():.1f} mm/hr\n\n"
+                f"Avg Temperature: {df_filtered['temperature_c'].mean():.1f} °C\n\n"
+                f"Active Fleet Drivers: {df_filtered['hourly_active_drivers'].mean():.0f} drivers")
 
 # TAB 2: Price Elasticity & Surge Simulator
 with tab2:
