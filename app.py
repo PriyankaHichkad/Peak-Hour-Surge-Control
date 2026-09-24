@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for executive dashboard styling
+# Custom CSS
 st.markdown("""
 <style>
     .main-header { font-size: 2.2rem; font-weight: 700; color: #1E293B; margin-bottom: 0.2rem; }
@@ -99,27 +99,19 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "🔮 Demand Forecast & Hotspot Analytics"
 ])
 
-# -------------------------------------------------------------
 # TAB 1: Live Geospatial Control Room
-# -------------------------------------------------------------
 with tab1:
     st.subheader(f"Geospatial Demand Clusters & Dispatch Zones at {selected_hour:02d}:00")
     
     col_map, col_details = st.columns([2.2, 1.0])
     
     with col_map:
-        # Create Folium Map centered on NYC
         nyc_map = folium.Map(location=[40.730610, -73.935242], zoom_start=11, tiles="CartoDB positron")
-        
-        # Color palette for clusters
         colors = ['#EF4444', '#F97316', '#F59E0B', '#10B981', '#6366F1', '#EC4899', '#8B5CF6']
         
-        # Plot Cluster Centroids & Bounding Hotspots
         if not cluster_summary.empty:
             for idx, c_row in cluster_summary.iterrows():
                 c_color = colors[int(c_row['cluster_id']) % len(colors)]
-                
-                # Determine recommended surge for this specific cluster density
                 surge_tier = round(max(1.0, opt_multiplier * (1.0 + 0.05 * idx)), 2)
                 
                 folium.CircleMarker(
@@ -153,15 +145,12 @@ with tab1:
                 f"**Avg Temperature:** {df_filtered['temperature_c'].mean():.1f} °C\n\n"
                 f"**Active Fleet Drivers:** {df_filtered['hourly_active_drivers'].mean():.0f} drivers")
 
-# -------------------------------------------------------------
 # TAB 2: Price Elasticity & Surge Simulator
-# -------------------------------------------------------------
 with tab2:
     st.subheader("Rider Price Elasticity vs Driver Acceptance Curves")
     st.markdown("This simulator models how rider cancellation probability increases with higher surge multipliers, while driver trip acceptance probability responds positively to surge incentives.")
     
     curve_df = opt_solution['curve_df']
-    
     fig_curve = gg.Figure()
     
     fig_curve.add_trace(gg.Scatter(
@@ -182,13 +171,11 @@ with tab2:
         line=dict(color='#3B82F6', width=4)
     ))
     
-    # Vertical line highlighting optimal multiplier M*
     fig_curve.add_vline(
         x=opt_multiplier, line_width=2, line_dash="dot", line_color="#8B5CF6",
         annotation_text=f"Optimal M* = {opt_multiplier}x", annotation_position="top left"
     )
     
-    # Horizontal line for max churn constraint
     fig_curve.add_hline(
         y=max_churn_threshold * 100, line_width=1.5, line_dash="dash", line_color="#DC2626",
         annotation_text=f"Max Churn Limit ({int(max_churn_threshold*100)}%)", annotation_position="bottom right"
@@ -204,9 +191,7 @@ with tab2:
     
     st.plotly_chart(fig_curve, use_container_width=True)
 
-# -------------------------------------------------------------
 # TAB 3: Executive KPIs & Unit Economics
-# -------------------------------------------------------------
 with tab3:
     st.subheader("Marketplace Financial & Operational Performance Comparison")
     
@@ -243,19 +228,18 @@ with tab3:
     
     st.table(pd.DataFrame(comp_data))
 
-# -------------------------------------------------------------
 # TAB 4: Demand Forecast & Hotspot Analytics
-# -------------------------------------------------------------
 with tab4:
-    st.subheader("24-Hour Time-Series Demand Forecasting")
-    
-    # Train Demand Forecasting Model
     forecast_model, hourly_df = build_demand_forecast_model(df_all)
+    model_type_name = forecast_model['model_type']
+    
+    st.subheader(f"24-Hour Time-Series Demand Forecasting ({model_type_name} Engine)")
+    
     forecast_24h = forecast_next_24h_demand(forecast_model, weather_severity_forecast=avg_weather_sev)
     
     fig_forecast = px.line(
         forecast_24h, x='hour', y='predicted_demand',
-        title="Predicted Hourly Ride Demand Curve (Next 24 Hours)",
+        title=f"Predicted Hourly Ride Demand Curve (Next 24 Hours via {model_type_name})",
         labels={'hour': 'Hour of Day (0-23)', 'predicted_demand': 'Predicted Ride Requests'},
         markers=True
     )
@@ -264,7 +248,6 @@ with tab4:
     
     st.plotly_chart(fig_forecast, use_container_width=True)
     
-    # Zone Demand Breakdown
     st.subheader("Historical Demand Density by NYC Zone")
     zone_counts = df_all['zone_name'].value_counts().reset_index()
     zone_counts.columns = ['NYC Micro-Zone', 'Total Requests']

@@ -3,14 +3,16 @@ import numpy as np
 from datetime import datetime, timedelta
 from src.weather_api import fetch_open_meteo_weather
 from src.data_loader import load_nyc_benchmark_pickups
+from src.elasticity import rider_cancellation_probability, driver_acceptance_probability
 
 def generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=250, seed=42):
     """
-    Combines real NYC spatial pickups & weather API data with simulated 2-sided marketplace telemetry.
+    Combines real NYC spatial pickups & weather API data with simulated 2-sided marketplace telemetry,
+    using unified price elasticity functions imported directly from src.elasticity.
     """
     np.random.seed(seed)
     
-    # 1. Fetch real/simulated Weather Data
+    # 1. Fetch Weather Data
     weather_df = fetch_open_meteo_weather(days_back=days)
     
     # 2. Sample NYC Benchmark Spatial Pickups
@@ -33,19 +35,16 @@ def generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=250, seed
         evening_rush = 1.9 if (17 <= hour <= 20 and not is_weekend) else 1.0
         weekend_night = 1.5 if (21 <= hour or hour <= 2) and is_weekend else 1.0
         
-        # Weather demand shock (rain boosts demand by up to 80%)
+        # Weather demand shock
         weather_shock = 1.0 + (0.8 * severity)
         
-        # Combined hourly demand multiplier
         hourly_demand_mult = morning_rush * evening_rush * weekend_night * weather_shock
         n_requests = int(base_requests_per_hour * hourly_demand_mult * np.random.uniform(0.85, 1.15))
         
-        # Supply response (rain or late night reduces active drivers)
         base_supply = base_requests_per_hour * np.random.uniform(0.8, 1.1)
-        weather_supply_dip = 1.0 - (0.35 * severity) # rain reduces active drivers by up to 35%
+        weather_supply_dip = 1.0 - (0.35 * severity)
         active_drivers = int(base_supply * weather_supply_dip)
         
-        # Unboosted initial surge ratio
         supply_demand_ratio = active_drivers / max(1, n_requests)
         if supply_demand_ratio < 0.6:
             initial_surge = round(min(2.8, 1.0 + (0.6 - supply_demand_ratio) * 2.5), 2)
@@ -58,14 +57,11 @@ def generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=250, seed
             sample = pickup_pool.iloc[pool_idx % len(pickup_pool)]
             pool_idx += 1
             
-            # Rider price elasticity model: higher surge = higher cancellation probability
-            # Rain reduces price sensitivity (urgency to get home)
-            price_sensitivity_k = 2.2 / (1.0 + 0.5 * severity)
-            cancellation_prob = 1.0 / (1.0 + np.exp(-price_sensitivity_k * (initial_surge - 1.4)))
+            # Unified Rider Cancellation & Driver Acceptance calculations from src.elasticity
+            cancellation_prob = rider_cancellation_probability(initial_surge, weather_severity=severity)
             rider_cancelled = np.random.binomial(1, cancellation_prob) == 1
             
-            # Driver acceptance response: higher surge = higher driver acceptance
-            driver_accept_prob = 1.0 / (1.0 + np.exp(-3.0 * (initial_surge - 1.1)))
+            driver_accept_prob = driver_acceptance_probability(initial_surge)
             driver_accepted = np.random.binomial(1, driver_accept_prob) == 1 if not rider_cancelled else False
             
             all_ride_logs.append({
@@ -97,7 +93,5 @@ def generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=250, seed
 
 if __name__ == "__main__":
     df = generate_hybrid_marketplace_dataset(days=3, base_requests_per_hour=100)
-    print(f"Generated Hybrid Telemetry Dataset: {len(df)} ride requests.")
+    print(f"Generated Unified Hybrid Telemetry Dataset: {len(df)} ride requests.")
     print(df.head())
-    print("\nFulfillment Summary:")
-    print(df['fulfilled'].value_counts(normalize=True))
