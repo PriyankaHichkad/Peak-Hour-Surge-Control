@@ -81,14 +81,19 @@ opt_multiplier = opt_solution['optimal_multiplier']
 # Run Granular DBSCAN Clustering (eps_km=0.35 / 350 meters)
 df_clustered, cluster_summary = detect_spatial_hotspots(df_filtered, eps_km=0.35, min_samples=5)
 
-# Calculate local cluster surge multipliers dynamically based on local cluster request density vs driver supply
+# Calculate local cluster surge multipliers dynamically based on hotspot request density vs driver fleet
 cluster_surges = []
 if not cluster_summary.empty:
-    total_cluster_requests = cluster_summary['request_count'].sum()
+    max_req_in_slice = cluster_summary['request_count'].max()
+    avg_req_in_slice = cluster_summary['request_count'].mean()
+    
     for idx, c_row in cluster_summary.iterrows():
-        # Share of total active drivers allocated proportionally to cluster density
-        local_driver_share = max(1.0, hourly_drivers * (c_row['request_count'] / max(1, total_cluster_requests)))
-        local_sd_ratio = local_driver_share / max(1, c_row['request_count'])
+        c_req = c_row['request_count']
+        
+        # Local supply/demand ratio is inversely proportional to cluster request density
+        # High demand hotspots (e.g. 50+ requests) get a low supply ratio -> high surge
+        density_factor = c_req / max(1, avg_req_in_slice)
+        local_sd_ratio = max(0.15, global_sd_ratio / (0.4 + 0.8 * density_factor))
         
         cluster_opt = solve_optimal_surge_multiplier(
             base_fare=15.0,
@@ -97,7 +102,18 @@ if not cluster_summary.empty:
             max_churn_threshold=max_churn_threshold,
             supply_demand_ratio=local_sd_ratio
         )
-        cluster_surges.append(cluster_opt['optimal_multiplier'])
+        
+        # Scale surge based on local density percentile
+        final_cluster_surge = cluster_opt['optimal_multiplier']
+        if density_factor > 1.8 and final_cluster_surge < 1.6:
+            final_cluster_surge = round(max(1.6, final_cluster_surge * 1.4), 2)
+        elif density_factor > 1.2 and final_cluster_surge < 1.3:
+            final_cluster_surge = round(max(1.3, final_cluster_surge * 1.2), 2)
+        elif density_factor < 0.6 and global_sd_ratio > 0.8:
+            final_cluster_surge = 1.0
+            
+        cluster_surges.append(final_cluster_surge)
+        
     cluster_summary['recommended_surge'] = cluster_surges
 
 # Helper function to return circle color strictly based on actual Surge Tier value
