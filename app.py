@@ -81,6 +81,22 @@ opt_multiplier = opt_solution['optimal_multiplier']
 # Run Granular DBSCAN Clustering (eps_km=0.35 / 350 meters)
 df_clustered, cluster_summary = detect_spatial_hotspots(df_filtered, eps_km=0.35, min_samples=5)
 
+# Calculate local cluster surge multipliers dynamically
+cluster_surges = []
+if not cluster_summary.empty:
+    max_cluster_req = cluster_summary['request_count'].max()
+    for idx, c_row in cluster_summary.iterrows():
+        c_ratio = c_row['request_count'] / max(1, max_cluster_req)
+        cluster_opt = solve_optimal_surge_multiplier(
+            base_fare=15.0,
+            price_sensitivity_k=price_sensitivity_k,
+            weather_severity=avg_weather_sev,
+            max_churn_threshold=max_churn_threshold,
+            supply_demand_ratio=max(0.1, global_sd_ratio / max(0.5, c_ratio * 1.8))
+        )
+        cluster_surges.append(cluster_opt['optimal_multiplier'])
+    cluster_summary['recommended_surge'] = cluster_surges
+
 # Calculate KPIs & Comparison
 kpi_comparison = compare_baseline_vs_optimized(df_filtered, opt_multiplier)
 base_kpis = kpi_comparison['baseline']
@@ -115,21 +131,9 @@ with tab1:
         colors = ['#EF4444', '#F97316', '#F59E0B', '#10B981', '#6366F1', '#EC4899', '#8B5CF6']
         
         if not cluster_summary.empty:
-            max_cluster_req = cluster_summary['request_count'].max()
             for idx, c_row in cluster_summary.iterrows():
                 c_color = colors[int(c_row['cluster_id']) % len(colors)]
-                
-                # Hyper-local cluster surge calculated dynamically from local cluster demand density
-                c_ratio = c_row['request_count'] / max(1, max_cluster_req)
-                cluster_opt = solve_optimal_surge_multiplier(
-                    base_fare=15.0,
-                    price_sensitivity_k=price_sensitivity_k,
-                    weather_severity=avg_weather_sev,
-                    max_churn_threshold=max_churn_threshold,
-                    supply_demand_ratio=max(0.1, global_sd_ratio / max(0.5, c_ratio * 1.8))
-                )
-                surge_tier = cluster_opt['optimal_multiplier']
-                
+                surge_tier = c_row['recommended_surge']
                 meter_radius = min(800, int(250 + c_row['request_count'] * 0.8))
                 
                 folium.Circle(
@@ -151,18 +155,20 @@ with tab1:
     with col_details:
         st.write("### Active Hotspots Summary")
         if not cluster_summary.empty:
-            disp_df = cluster_summary[['cluster_id', 'primary_zone', 'request_count', 'cancellation_rate']].copy()
-            disp_df.columns = ['ID', 'Zone', 'Requests', 'Churn Rate']
+            disp_df = cluster_summary[['cluster_id', 'primary_zone', 'request_count', 'cancellation_rate', 'recommended_surge']].copy()
+            disp_df.columns = ['ID', 'Zone', 'Requests', 'Churn Rate', 'Local Surge']
             disp_df['Churn Rate'] = (disp_df['Churn Rate'] * 100).round(1).astype(str) + "%"
+            disp_df['Local Surge'] = disp_df['Local Surge'].astype(str) + "x"
             st.dataframe(disp_df, hide_index=True, use_container_width=True)
         else:
             st.info("No dense clusters detected for this hour slice. Demand is evenly distributed.")
             
+        sd_status_text = "Severe Shortage" if global_sd_ratio < 0.5 else ("Balanced" if global_sd_ratio < 1.0 else "High Supply")
         st.write("### Environment Status")
         st.info(f"Precipitation: {df_filtered['precipitation_mm'].mean():.1f} mm/hr\n\n"
                 f"Avg Temperature: {df_filtered['temperature_c'].mean():.1f} °C\n\n"
                 f"Active Fleet Drivers: {df_filtered['hourly_active_drivers'].mean():.0f} drivers\n\n"
-                f"Supply/Demand Ratio: {global_sd_ratio:.2f}")
+                f"Supply/Demand Ratio: {global_sd_ratio:.2f} ({sd_status_text})")
 
 # TAB 2: Price Elasticity & Surge Simulator
 with tab2:
