@@ -105,7 +105,8 @@ with tab1:
     col_map, col_details = st.columns([2.2, 1.0])
     
     with col_map:
-        nyc_map = folium.Map(location=[40.730610, -73.935242], zoom_start=11, tiles="CartoDB positron")
+        # Use OpenStreetMap tiles for 100% free open-access maps with zero API key requirement
+        nyc_map = folium.Map(location=[40.730610, -73.935242], zoom_start=11, tiles="OpenStreetMap")
         colors = ['#EF4444', '#F97316', '#F59E0B', '#10B981', '#6366F1', '#EC4899', '#8B5CF6']
         
         if not cluster_summary.empty:

@@ -14,7 +14,6 @@ def build_demand_forecast_model(df_telemetry, prefer_prophet=True):
     Fits an hourly demand forecasting model.
     Uses Meta Prophet (with regressors) if available, with robust fallback to Ridge Regression on cyclic features.
     """
-    # Aggregate to hourly demand series
     hourly_df = df_telemetry.groupby(['date', 'hour', 'day_of_week', 'is_weekend']).agg({
         'ride_id': 'count',
         'precipitation_mm': 'mean',
@@ -22,7 +21,6 @@ def build_demand_forecast_model(df_telemetry, prefer_prophet=True):
         'temperature_c': 'mean'
     }).reset_index().rename(columns={'ride_id': 'demand_count'})
     
-    # Construct Datetime series
     hourly_df['timestamp'] = pd.to_datetime(hourly_df['date'].astype(str) + ' ' + hourly_df['hour'].astype(str) + ':00:00')
     hourly_df = hourly_df.sort_values('timestamp').reset_index(drop=True)
     
@@ -47,7 +45,6 @@ def build_demand_forecast_model(df_telemetry, prefer_prophet=True):
         except Exception as e:
             print(f"[Prophet Warning] Prophet fit failed ({e}). Falling back to Ridge regression.")
             
-    # Fallback / Dual Mode: Ridge Regression on Cyclic Features
     hourly_df['hour_sin'] = np.sin(2 * np.pi * hourly_df['hour'] / 24.0)
     hourly_df['hour_cos'] = np.cos(2 * np.pi * hourly_df['hour'] / 24.0)
     
@@ -73,8 +70,8 @@ def forecast_next_24h_demand(model_dict, base_date=None, weather_severity_foreca
     
     if model_type == 'Prophet':
         m = model_dict['model_obj']
-        future = m.make_future_dataframe(periods=24, freq='H')
-        # Add regressor values for future
+        # Pandas 2.2+ frequency compatibility: use 'h' or '1h' instead of deprecated 'H'
+        future = m.make_future_dataframe(periods=24, freq='h')
         future['precipitation_mm'] = weather_severity_forecast * 10.0
         future['weather_severity'] = weather_severity_forecast
         
@@ -84,14 +81,13 @@ def forecast_next_24h_demand(model_dict, base_date=None, weather_severity_foreca
         future_24['predicted_demand'] = np.maximum(0, np.round(future_24['predicted_demand']))
         return future_24
         
-    # Ridge Regression Fallback Future Generator
     ridge_model = model_dict['model_obj']
     future_hours = []
     
     for h in range(24):
         h_sin = np.sin(2 * np.pi * h / 24.0)
         h_cos = np.cos(2 * np.pi * h / 24.0)
-        dow = 4 # Default Friday
+        dow = 4
         is_wknd = False
         
         future_hours.append({
@@ -108,10 +104,3 @@ def forecast_next_24h_demand(model_dict, base_date=None, weather_severity_foreca
     feature_cols = model_dict['feature_cols']
     future_df['predicted_demand'] = np.maximum(0, np.round(ridge_model.predict(future_df[feature_cols])))
     return future_df
-
-if __name__ == "__main__":
-    from src.data_generator import generate_hybrid_marketplace_dataset
-    df = generate_hybrid_marketplace_dataset(days=5, base_requests_per_hour=120)
-    model_dict, hourly_summary = build_demand_forecast_model(df)
-    print(f"Demand Forecast Engine ({model_dict['model_type']}) Executed Successfully!")
-    print(hourly_summary[['timestamp', 'demand_count', 'predicted_demand']].head(10))
