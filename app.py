@@ -72,8 +72,8 @@ opt_solution = solve_optimal_surge_multiplier(
 )
 opt_multiplier = opt_solution['optimal_multiplier']
 
-# Run DBSCAN Clustering
-df_clustered, cluster_summary = detect_spatial_hotspots(df_filtered, eps_km=0.8, min_samples=10)
+# Run Granular DBSCAN Clustering (eps_km=0.35 / 350 meters)
+df_clustered, cluster_summary = detect_spatial_hotspots(df_filtered, eps_km=0.35, min_samples=5)
 
 # Calculate KPIs & Comparison
 kpi_comparison = compare_baseline_vs_optimized(df_filtered, opt_multiplier)
@@ -105,22 +105,24 @@ with tab1:
     col_map, col_details = st.columns([2.2, 1.0])
     
     with col_map:
-        # Use OpenStreetMap tiles for 100% free open-access maps with zero API key requirement
         nyc_map = folium.Map(location=[40.730610, -73.935242], zoom_start=11, tiles="OpenStreetMap")
         colors = ['#EF4444', '#F97316', '#F59E0B', '#10B981', '#6366F1', '#EC4899', '#8B5CF6']
         
         if not cluster_summary.empty:
             for idx, c_row in cluster_summary.iterrows():
                 c_color = colors[int(c_row['cluster_id']) % len(colors)]
-                surge_tier = round(max(1.0, opt_multiplier * (1.0 + 0.05 * idx)), 2)
+                surge_tier = round(max(1.0, opt_multiplier * (1.0 + 0.03 * idx)), 2)
                 
-                folium.CircleMarker(
+                # Physical ground meters radius (locks to physical ground distance when zooming)
+                meter_radius = min(800, int(250 + c_row['request_count'] * 0.8))
+                
+                folium.Circle(
                     location=[c_row['centroid_lat'], c_row['centroid_lon']],
-                    radius=12 + (c_row['request_count'] / 8),
+                    radius=meter_radius,
                     color=c_color,
                     fill=True,
                     fill_color=c_color,
-                    fill_opacity=0.6,
+                    fill_opacity=0.5,
                     popup=f"<b>Hotspot Cluster #{c_row['cluster_id']}</b><br>"
                           f"Zone: {c_row['primary_zone']}<br>"
                           f"Ride Requests: {c_row['request_count']}<br>"

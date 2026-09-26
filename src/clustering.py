@@ -5,10 +5,10 @@ from sklearn.cluster import DBSCAN
 # Earth radius in kilometers for Haversine conversion
 EARTH_RADIUS_KM = 6371.0088
 
-def detect_spatial_hotspots(df_subset, eps_km=0.8, min_samples=12):
+def detect_spatial_hotspots(df_subset, eps_km=0.35, min_samples=5):
     """
-    Applies DBSCAN clustering on ride request GPS coordinates using Haversine distance metric.
-    Returns cluster centroids, request density, and spatial deficit metrics.
+    Applies granular DBSCAN clustering on ride request GPS coordinates using Haversine distance.
+    Parameters tuned (eps_km=0.35 / 350 meters) to detect distinct neighborhood micro-clusters.
     """
     if len(df_subset) < min_samples:
         df_subset = df_subset.copy()
@@ -17,7 +17,6 @@ def detect_spatial_hotspots(df_subset, eps_km=0.8, min_samples=12):
     
     df_copy = df_subset.copy()
     
-    # Convert lat/lon to radians for scikit-learn Haversine metric
     coords_rad = np.radians(df_copy[['pickup_lat', 'pickup_lon']].values)
     kms_per_radian = EARTH_RADIUS_KM
     eps_rad = eps_km / kms_per_radian
@@ -25,7 +24,6 @@ def detect_spatial_hotspots(df_subset, eps_km=0.8, min_samples=12):
     db = DBSCAN(eps=eps_rad, min_samples=min_samples, metric='haversine')
     df_copy['cluster_id'] = db.fit_predict(coords_rad)
     
-    # Calculate Cluster Centroids & Density Statistics
     cluster_stats = []
     unique_clusters = [c for c in df_copy['cluster_id'].unique() if c != -1]
     
@@ -57,8 +55,7 @@ def detect_spatial_hotspots(df_subset, eps_km=0.8, min_samples=12):
 if __name__ == "__main__":
     from src.data_generator import generate_hybrid_marketplace_dataset
     df = generate_hybrid_marketplace_dataset(days=1, base_requests_per_hour=150)
-    # Filter for peak hour slice
     peak_slice = df[df['hour'] == 18]
-    df_clustered, clusters = detect_spatial_hotspots(peak_slice, eps_km=0.8, min_samples=10)
-    print(f"Detected {len(clusters)} Spatial Hotspots at 6 PM:")
+    df_clustered, clusters = detect_spatial_hotspots(peak_slice, eps_km=0.35, min_samples=5)
+    print(f"Detected {len(clusters)} Granular Hotspots at 6 PM:")
     print(clusters)
