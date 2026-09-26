@@ -81,21 +81,35 @@ opt_multiplier = opt_solution['optimal_multiplier']
 # Run Granular DBSCAN Clustering (eps_km=0.35 / 350 meters)
 df_clustered, cluster_summary = detect_spatial_hotspots(df_filtered, eps_km=0.35, min_samples=5)
 
-# Calculate local cluster surge multipliers dynamically
+# Calculate local cluster surge multipliers dynamically based on local cluster request density vs driver supply
 cluster_surges = []
 if not cluster_summary.empty:
-    max_cluster_req = cluster_summary['request_count'].max()
+    total_cluster_requests = cluster_summary['request_count'].sum()
     for idx, c_row in cluster_summary.iterrows():
-        c_ratio = c_row['request_count'] / max(1, max_cluster_req)
+        # Share of total active drivers allocated proportionally to cluster density
+        local_driver_share = max(1.0, hourly_drivers * (c_row['request_count'] / max(1, total_cluster_requests)))
+        local_sd_ratio = local_driver_share / max(1, c_row['request_count'])
+        
         cluster_opt = solve_optimal_surge_multiplier(
             base_fare=15.0,
             price_sensitivity_k=price_sensitivity_k,
             weather_severity=avg_weather_sev,
             max_churn_threshold=max_churn_threshold,
-            supply_demand_ratio=max(0.1, global_sd_ratio / max(0.5, c_ratio * 1.8))
+            supply_demand_ratio=local_sd_ratio
         )
         cluster_surges.append(cluster_opt['optimal_multiplier'])
     cluster_summary['recommended_surge'] = cluster_surges
+
+# Helper function to return circle color strictly based on actual Surge Tier value
+def get_surge_color(surge_val):
+    if surge_val >= 1.6:
+        return '#EF4444' # High Surge: Red
+    elif surge_val >= 1.3:
+        return '#F97316' # Moderate Surge: Orange
+    elif surge_val > 1.05:
+        return '#F59E0B' # Mild Surge: Yellow
+    else:
+        return '#10B981' # Base Price 1.0x: Green
 
 # Calculate KPIs & Comparison
 kpi_comparison = compare_baseline_vs_optimized(df_filtered, opt_multiplier)
@@ -128,12 +142,11 @@ with tab1:
     
     with col_map:
         nyc_map = folium.Map(location=[40.730610, -73.935242], zoom_start=11, tiles="OpenStreetMap")
-        colors = ['#EF4444', '#F97316', '#F59E0B', '#10B981', '#6366F1', '#EC4899', '#8B5CF6']
         
         if not cluster_summary.empty:
             for idx, c_row in cluster_summary.iterrows():
-                c_color = colors[int(c_row['cluster_id']) % len(colors)]
                 surge_tier = c_row['recommended_surge']
+                c_color = get_surge_color(surge_tier)
                 meter_radius = min(800, int(250 + c_row['request_count'] * 0.8))
                 
                 folium.Circle(
@@ -142,7 +155,7 @@ with tab1:
                     color=c_color,
                     fill=True,
                     fill_color=c_color,
-                    fill_opacity=0.5,
+                    fill_opacity=0.6,
                     popup=f"<b>Hotspot Cluster #{c_row['cluster_id']}</b><br>"
                           f"Zone: {c_row['primary_zone']}<br>"
                           f"Ride Requests: {c_row['request_count']}<br>"
