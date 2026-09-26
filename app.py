@@ -63,12 +63,18 @@ elif weather_override == "Heavy Storm (8.0mm)":
 
 avg_weather_sev = df_filtered['weather_severity'].mean()
 
-# Solve Optimal Surge Multiplier M*
+# Calculate Dynamic Hourly Supply-Demand Ratio based on selected hour & weather
+hourly_requests = len(df_filtered)
+hourly_drivers = df_filtered['hourly_active_drivers'].mean() if not df_filtered.empty else 100
+global_sd_ratio = hourly_drivers / max(1, hourly_requests)
+
+# Solve Optimal Surge Multiplier M* dynamically driven by hour & weather supply-demand ratio
 opt_solution = solve_optimal_surge_multiplier(
     base_fare=15.0, 
     price_sensitivity_k=price_sensitivity_k, 
     weather_severity=avg_weather_sev, 
-    max_churn_threshold=max_churn_threshold
+    max_churn_threshold=max_churn_threshold,
+    supply_demand_ratio=global_sd_ratio
 )
 opt_multiplier = opt_solution['optimal_multiplier']
 
@@ -109,11 +115,21 @@ with tab1:
         colors = ['#EF4444', '#F97316', '#F59E0B', '#10B981', '#6366F1', '#EC4899', '#8B5CF6']
         
         if not cluster_summary.empty:
+            max_cluster_req = cluster_summary['request_count'].max()
             for idx, c_row in cluster_summary.iterrows():
                 c_color = colors[int(c_row['cluster_id']) % len(colors)]
-                surge_tier = round(max(1.0, opt_multiplier * (1.0 + 0.03 * idx)), 2)
                 
-                # Physical ground meters radius (locks to physical ground distance when zooming)
+                # Hyper-local cluster surge calculated dynamically from local cluster demand density
+                c_ratio = c_row['request_count'] / max(1, max_cluster_req)
+                cluster_opt = solve_optimal_surge_multiplier(
+                    base_fare=15.0,
+                    price_sensitivity_k=price_sensitivity_k,
+                    weather_severity=avg_weather_sev,
+                    max_churn_threshold=max_churn_threshold,
+                    supply_demand_ratio=max(0.1, global_sd_ratio / max(0.5, c_ratio * 1.8))
+                )
+                surge_tier = cluster_opt['optimal_multiplier']
+                
                 meter_radius = min(800, int(250 + c_row['request_count'] * 0.8))
                 
                 folium.Circle(
@@ -127,7 +143,7 @@ with tab1:
                           f"Zone: {c_row['primary_zone']}<br>"
                           f"Ride Requests: {c_row['request_count']}<br>"
                           f"Cancellation Rate: {c_row['cancellation_rate']*100:.1f}%<br>"
-                          f"<b>Recommended Surge: {surge_tier}x</b>"
+                          f"<b>Recommended Local Surge: {surge_tier}x</b>"
                 ).add_to(nyc_map)
                 
         st_folium(nyc_map, width=800, height=480)
@@ -145,7 +161,8 @@ with tab1:
         st.write("### Environment Status")
         st.info(f"Precipitation: {df_filtered['precipitation_mm'].mean():.1f} mm/hr\n\n"
                 f"Avg Temperature: {df_filtered['temperature_c'].mean():.1f} °C\n\n"
-                f"Active Fleet Drivers: {df_filtered['hourly_active_drivers'].mean():.0f} drivers")
+                f"Active Fleet Drivers: {df_filtered['hourly_active_drivers'].mean():.0f} drivers\n\n"
+                f"Supply/Demand Ratio: {global_sd_ratio:.2f}")
 
 # TAB 2: Price Elasticity & Surge Simulator
 with tab2:
