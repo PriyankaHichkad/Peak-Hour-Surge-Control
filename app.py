@@ -134,7 +134,7 @@ opt_kpis = kpi_comparison['optimized']
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Optimal Surge Multiplier", f"{opt_multiplier}x", f"{round(opt_multiplier - 1.0, 2)}x boost")
 c2.metric("Marketplace Fulfillment", f"{opt_kpis['fulfillment_rate']}%", f"{kpi_comparison['fulfillment_lift_pct_pts']:+} pts vs baseline")
-c3.metric("Rider Churn Rate", f"{opt_kpis['cancellation_rate']}%", f"{round(opt_kpis['cancellation_rate'] - base_kpis['cancellation_rate'], 1):+} pts")
+c3.metric("Rider Churn Rate", f"{opt_kpis['cancellation_rate']}%", f"{round(opt_kpis['cancellation_rate'] - base_kpis['cancellation_rate'], 1):+} pts", delta_color="inverse")
 c4.metric("Total GMV (Hourly)", f"${opt_kpis['total_gmv_usd']:,.2f}", f"{kpi_comparison['gmv_lift_pct']:+} % GMV Lift")
 c5.metric("NPS Impact Score Index", f"{opt_kpis['nps_index_score']} / 100", f"{opt_kpis['nps_index_score'] - base_kpis['nps_index_score']:+} pts")
 

@@ -79,7 +79,9 @@ def solve_optimal_surge_multiplier(base_fare=15.0, price_sensitivity_k=DEFAULT_P
     multipliers = np.linspace(1.0, 3.0, 201)
     df_curve = compute_marketplace_fulfillment_curve(multipliers, base_fare, price_sensitivity_k, weather_severity, supply_demand_ratio)
     
-    valid_candidates = df_curve[df_curve['rider_cancel_prob'] <= max_churn_threshold]
+    # During supply deficits (S/D < 0.95), allow deficit surge elasticity up to max(max_churn_threshold, 0.40) to attract drivers
+    effective_churn_cap = max(max_churn_threshold, 0.40) if supply_demand_ratio < 0.95 else max_churn_threshold
+    valid_candidates = df_curve[df_curve['rider_cancel_prob'] <= effective_churn_cap]
     
     if valid_candidates.empty:
         best_row = df_curve.loc[df_curve['rider_cancel_prob'].idxmin()]
