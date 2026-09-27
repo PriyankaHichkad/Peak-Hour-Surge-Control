@@ -9,11 +9,11 @@ DEFAULT_DRIVER_INCENTIVE_LAMBDA = 3.2
 def rider_cancellation_probability(multiplier, price_sensitivity_k=DEFAULT_PRICE_SENSITIVITY_K, inflection_m0=DEFAULT_INFLECTION_M0, weather_severity=0.0):
     """
     Rider Churn Probability as a function of Surge Multiplier and Weather Urgency.
-    Rain/storm reduces rider price sensitivity.
+    Baseline non-surged cancellation ~10%-14%, scaling up smoothly with surge.
     """
     effective_k = price_sensitivity_k / (1.0 + 0.5 * weather_severity)
-    prob = 1.0 / (1.0 + np.exp(-effective_k * (multiplier - inflection_m0)))
-    return np.clip(prob, 0.02, 0.95)
+    prob = 0.10 + 0.75 / (1.0 + np.exp(-effective_k * (multiplier - inflection_m0)))
+    return np.clip(prob, 0.05, 0.95)
 
 def driver_acceptance_probability(multiplier, incentive_lambda=DEFAULT_DRIVER_INCENTIVE_LAMBDA):
     """
