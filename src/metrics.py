@@ -47,7 +47,7 @@ def calculate_marketplace_kpis(df):
         'nps_index_score': nps_index
     }
 
-def compare_baseline_vs_optimized(df_raw, opt_surge_multiplier):
+def compare_baseline_vs_optimized(df_raw, opt_surge_multiplier, price_sensitivity_k=2.2):
     """
     Compares baseline unoptimized marketplace performance vs optimized surge control engine.
     Supports both global scalar multiplier and Series of per-cluster multipliers.
@@ -59,11 +59,11 @@ def compare_baseline_vs_optimized(df_raw, opt_surge_multiplier):
     
     if isinstance(opt_surge_multiplier, (pd.Series, np.ndarray, list)):
         df_opt['initial_surge_multiplier'] = opt_surge_multiplier
-        p_cancel = df_opt.apply(lambda r: rider_cancellation_probability(r['initial_surge_multiplier'], weather_severity=r.get('weather_severity', 0.0)), axis=1)
+        p_cancel = df_opt.apply(lambda r: rider_cancellation_probability(r['initial_surge_multiplier'], price_sensitivity_k=price_sensitivity_k, weather_severity=r.get('weather_severity', 0.0)), axis=1)
         p_accept = df_opt['initial_surge_multiplier'].apply(lambda m: driver_acceptance_probability(m))
     else:
         df_opt['initial_surge_multiplier'] = opt_surge_multiplier
-        p_cancel = rider_cancellation_probability(opt_surge_multiplier, weather_severity=df_opt['weather_severity'].mean())
+        p_cancel = rider_cancellation_probability(opt_surge_multiplier, price_sensitivity_k=price_sensitivity_k, weather_severity=df_opt['weather_severity'].mean())
         p_accept = driver_acceptance_probability(opt_surge_multiplier)
         
     np.random.seed(42)

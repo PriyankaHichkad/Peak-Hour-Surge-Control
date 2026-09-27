@@ -130,7 +130,7 @@ def get_surge_color(surge_val):
         return '#10B981' # Base Price 1.0x: Green
 
 # Calculate KPIs & Comparison using cluster-level dynamic surge allocation
-kpi_comparison = compare_baseline_vs_optimized(df_clustered, opt_surge_series)
+kpi_comparison = compare_baseline_vs_optimized(df_clustered, opt_surge_series, price_sensitivity_k=price_sensitivity_k)
 base_kpis = kpi_comparison['baseline']
 opt_kpis = kpi_comparison['optimized']
 
