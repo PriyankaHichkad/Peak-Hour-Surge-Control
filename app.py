@@ -110,16 +110,14 @@ if not cluster_summary.empty:
 else:
     opt_surge_series = opt_multiplier
 
-# Helper function to return circle color strictly based on fine-grained Surge Tier value
+# Helper function to return circle color strictly based on empirical SciPy multiplier spectrum
 def get_surge_color(surge_val):
     if surge_val >= 1.18:
-        return '#EF4444' # High Surge Peak: Crimson Red
-    elif surge_val >= 1.12:
-        return '#F97316' # Moderate Surge: Bright Orange
-    elif surge_val > 1.04:
-        return '#3B82F6' # Mild Surge: Royal Blue
+        return '#EF4444' # Peak Surge (1.21x): Crimson Red
+    elif surge_val >= 1.05:
+        return '#F97316' # Moderate Surge (1.08x): Bright Orange
     else:
-        return '#10B981' # Base Price 1.0x: Emerald Green
+        return '#10B981' # Base Price (1.00x): Emerald Green
 
 # Calculate KPIs & Comparison using cluster-level dynamic surge allocation
 kpi_comparison = compare_baseline_vs_optimized(df_clustered, opt_surge_series, price_sensitivity_k=price_sensitivity_k)
