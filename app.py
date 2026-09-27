@@ -101,15 +101,8 @@ if not cluster_summary.empty:
             supply_demand_ratio=local_sd_ratio
         )
         
-        # Scale surge based on local density percentile
+        # Dynamic surge multiplier derived directly from SciPy elasticity solver
         final_cluster_surge = cluster_opt['optimal_multiplier']
-        if density_factor > 1.8 and final_cluster_surge < 1.6:
-            final_cluster_surge = round(max(1.6, final_cluster_surge * 1.4), 2)
-        elif density_factor > 1.2 and final_cluster_surge < 1.3:
-            final_cluster_surge = round(max(1.3, final_cluster_surge * 1.2), 2)
-        elif density_factor < 0.6 and global_sd_ratio > 0.8:
-            final_cluster_surge = 1.0
-            
         cluster_surges.append(final_cluster_surge)
         
     cluster_summary['recommended_surge'] = cluster_surges
