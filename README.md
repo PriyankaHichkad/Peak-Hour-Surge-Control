@@ -31,7 +31,17 @@ flowchart TD
 
 ---
 
-## Core Methodology & Implementation Details
+## Core Methodology & Data Sources
+
+### Data Sources & Raw Data Downloads
+
+The project builds upon authentic NYC urban mobility & weather datasets:
+
+1. **NYC Uber & TLC Trip Data (Raw Pickup Coordinates):**
+   - **Official NYC TLC Trip Records:** [NYC Taxi & Limousine Commission (TLC) Data Portal](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
+   - **FiveThirtyEight NYC Uber Pickups Dataset:** [FiveThirtyEight GitHub Repo](https://github.com/fivethirtyeight/uber-tlc-foil-response) \| [Kaggle Dataset Mirror](https://www.kaggle.com/datasets/fivethirtyeight/uber-pickups-in-new-york-city)
+2. **Open-Meteo Weather API (Hourly NYC Climate Data):**
+   - **Historical Weather API:** [Open-Meteo Archive API Documentation](https://open-meteo.com/en/docs/historical-weather-api)
 
 ### 1. Data Pipeline: NYC-Calibrated Telemetry + Live Weather API
 * **Live Weather Integration:** Queries the **Open-Meteo Weather API** for real-time/historical hourly precipitation ($mm/hr$) and temperature in NYC (`lat: 40.7128, lon: -74.0060`), mapping rain events to demand spikes. Includes offline cached fallbacks.
@@ -96,7 +106,8 @@ Peak-Hour-Surge-Control/
 │   ├── clustering.py              # DBSCAN geospatial hotspot engine
 │   ├── forecasting.py             # Meta Prophet & Ridge time-series forecaster
 │   ├── elasticity.py              # Price Elasticity Solver (scipy.optimize)
-│   └── metrics.py                 # Marketplace KPIs & unit economics comparator
+│   ├── metrics.py                 # Marketplace KPIs & unit economics comparator
+│   └── evaluate_metrics.py        # Multi-level evaluation report script (Clusters, Hourly, Daily)
 ├── tests/                         # Automated Pytest Suite
 │   ├── test_clustering.py
 │   ├── test_elasticity.py
