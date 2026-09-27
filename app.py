@@ -143,11 +143,9 @@ c5.metric("NPS Impact Score Index", f"{opt_kpis['nps_index_score']} / 100", f"{o
 st.markdown("---")
 
 # Main Navigation Tabs
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2 = st.tabs([
     "Live Geospatial Control Room", 
-    "Price Elasticity & Surge Simulator", 
-    "Executive KPIs & Unit Economics", 
-    "Demand Forecast & Hotspot Analytics"
+    "Marketplace Metrics & Analytics"
 ])
 
 # TAB 1: Live Geospatial Control Room
@@ -205,9 +203,48 @@ with tab1:
     else:
         st.info("No dense clusters detected for this hour slice. Demand is evenly distributed.")
 
-# TAB 2: Price Elasticity & Surge Simulator
+# TAB 2: Marketplace Metrics & Analytics
 with tab2:
-    st.subheader("Rider Price Elasticity vs Driver Acceptance Curves")
+    # 1. Executive KPIs & Unit Economics
+    st.subheader("1. Marketplace Financial & Operational Performance Comparison")
+    
+    comp_data = {
+        'Metric': ['Total Hourly Requests', 'Fulfilled Trips', 'Marketplace Fulfillment Rate', 'Rider Cancellation Rate', 'Hourly Gross Merchandise Value (GMV)', 'Driver Hourly Earnings Rate', 'Customer NPS Index'],
+        'Baseline (Unoptimized)': [
+            f"{base_kpis['total_requests']:,}",
+            f"{base_kpis['fulfilled_trips']:,}",
+            f"{base_kpis['fulfillment_rate']}%",
+            f"{base_kpis['cancellation_rate']}%",
+            f"${base_kpis['total_gmv_usd']:,.2f}",
+            f"${base_kpis['driver_hourly_rate_usd']:.2f}/hr",
+            f"{base_kpis['nps_index_score']} / 100"
+        ],
+        'Optimized (Peak Hour Surge Control)': [
+            f"{opt_kpis['total_requests']:,}",
+            f"{opt_kpis['fulfilled_trips']:,}",
+            f"{opt_kpis['fulfillment_rate']}%",
+            f"{opt_kpis['cancellation_rate']}%",
+            f"${opt_kpis['total_gmv_usd']:,.2f}",
+            f"${opt_kpis['driver_hourly_rate_usd']:.2f}/hr",
+            f"{opt_kpis['nps_index_score']} / 100"
+        ],
+        'Impact / Lift': [
+            "-",
+            f"+{opt_kpis['fulfilled_trips'] - base_kpis['fulfilled_trips']:,} trips",
+            f"{kpi_comparison['fulfillment_lift_pct_pts']:+} pts",
+            f"{round(opt_kpis['cancellation_rate'] - base_kpis['cancellation_rate'], 1):+} pts",
+            f"+{kpi_comparison['gmv_lift_pct']}% GMV",
+            f"+${round(opt_kpis['driver_hourly_rate_usd'] - base_kpis['driver_hourly_rate_usd'], 2)}/hr",
+            f"+{opt_kpis['nps_index_score'] - base_kpis['nps_index_score']} pts"
+        ]
+    }
+    
+    st.table(pd.DataFrame(comp_data))
+    
+    st.markdown("---")
+    
+    # 2. Price Elasticity & Surge Equilibrium Simulator
+    st.subheader("2. Rider Price Elasticity vs Driver Acceptance Curves")
     st.markdown("This simulator models how rider cancellation probability increases with higher surge multipliers, while driver trip acceptance probability responds positively to surge incentives.")
     
     curve_df = opt_solution['curve_df']
@@ -250,50 +287,14 @@ with tab2:
     )
     
     st.plotly_chart(fig_curve, use_container_width=True)
-
-# TAB 3: Executive KPIs & Unit Economics
-with tab3:
-    st.subheader("Marketplace Financial & Operational Performance Comparison")
     
-    comp_data = {
-        'Metric': ['Total Hourly Requests', 'Fulfilled Trips', 'Marketplace Fulfillment Rate', 'Rider Cancellation Rate', 'Hourly Gross Merchandise Value (GMV)', 'Driver Hourly Earnings Rate', 'Customer NPS Index'],
-        'Baseline (Unoptimized)': [
-            f"{base_kpis['total_requests']:,}",
-            f"{base_kpis['fulfilled_trips']:,}",
-            f"{base_kpis['fulfillment_rate']}%",
-            f"{base_kpis['cancellation_rate']}%",
-            f"${base_kpis['total_gmv_usd']:,.2f}",
-            f"${base_kpis['driver_hourly_rate_usd']:.2f}/hr",
-            f"{base_kpis['nps_index_score']} / 100"
-        ],
-        'Optimized (Peak Hour Surge Control)': [
-            f"{opt_kpis['total_requests']:,}",
-            f"{opt_kpis['fulfilled_trips']:,}",
-            f"{opt_kpis['fulfillment_rate']}%",
-            f"{opt_kpis['cancellation_rate']}%",
-            f"${opt_kpis['total_gmv_usd']:,.2f}",
-            f"${opt_kpis['driver_hourly_rate_usd']:.2f}/hr",
-            f"{opt_kpis['nps_index_score']} / 100"
-        ],
-        'Impact / Lift': [
-            "-",
-            f"+{opt_kpis['fulfilled_trips'] - base_kpis['fulfilled_trips']:,} trips",
-            f"{kpi_comparison['fulfillment_lift_pct_pts']:+} pts",
-            f"{round(opt_kpis['cancellation_rate'] - base_kpis['cancellation_rate'], 1):+} pts",
-            f"+{kpi_comparison['gmv_lift_pct']}% GMV",
-            f"+${round(opt_kpis['driver_hourly_rate_usd'] - base_kpis['driver_hourly_rate_usd'], 2)}/hr",
-            f"+{opt_kpis['nps_index_score'] - base_kpis['nps_index_score']} pts"
-        ]
-    }
+    st.markdown("---")
     
-    st.table(pd.DataFrame(comp_data))
-
-# TAB 4: Demand Forecast & Hotspot Analytics
-with tab4:
+    # 3. Demand Forecast & Hotspot Analytics
     forecast_model, hourly_df = build_demand_forecast_model(df_all)
     model_type_name = forecast_model['model_type']
     
-    st.subheader(f"24-Hour Time-Series Demand Forecasting ({model_type_name} Engine)")
+    st.subheader(f"3. 24-Hour Time-Series Demand Forecasting ({model_type_name} Engine)")
     
     forecast_24h = forecast_next_24h_demand(forecast_model, weather_severity_forecast=avg_weather_sev)
     
