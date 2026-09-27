@@ -112,15 +112,16 @@ else:
     opt_surge_series = opt_multiplier
 
 # Helper function to return circle color strictly based on actual Surge Tier value
+# Helper function to return circle color strictly based on fine-grained Surge Tier value
 def get_surge_color(surge_val):
-    if surge_val >= 1.6:
-        return '#EF4444' # High Surge: Red
-    elif surge_val >= 1.3:
-        return '#F97316' # Moderate Surge: Orange
+    if surge_val >= 1.25:
+        return '#EF4444' # High Surge: Crimson Red
+    elif surge_val >= 1.15:
+        return '#F97316' # Moderate Surge: Bright Orange
     elif surge_val > 1.05:
-        return '#F59E0B' # Mild Surge: Yellow
+        return '#3B82F6' # Mild Surge: Royal Blue
     else:
-        return '#10B981' # Base Price 1.0x: Green
+        return '#10B981' # Base Price 1.0x: Emerald Green
 
 # Calculate KPIs & Comparison using cluster-level dynamic surge allocation
 kpi_comparison = compare_baseline_vs_optimized(df_clustered, opt_surge_series, price_sensitivity_k=price_sensitivity_k)
@@ -152,6 +153,21 @@ with tab1:
     with col_map:
         nyc_map = folium.Map(location=[40.730610, -73.935242], zoom_start=11, tiles="OpenStreetMap")
         
+        # 1. Plot Individual Pickup Sample Markers (Green = Fulfilled, Red = Cancelled)
+        sample_pickups = df_clustered.sample(n=min(60, len(df_clustered)), random_state=42)
+        for _, p_row in sample_pickups.iterrows():
+            marker_color = '#10B981' if p_row['fulfilled'] else '#EF4444'
+            folium.CircleMarker(
+                location=[p_row['pickup_lat'], p_row['pickup_lon']],
+                radius=4,
+                color=marker_color,
+                fill=True,
+                fill_color=marker_color,
+                fill_opacity=0.7,
+                popup=f"Pickup: {p_row['zone_name']}<br>Fare: ${p_row['base_fare_usd']:.2f}<br>Status: {'Fulfilled' if p_row['fulfilled'] else 'Cancelled'}"
+            ).add_to(nyc_map)
+        
+        # 2. Plot DBSCAN Spatial Hotspot Clusters
         if not cluster_summary.empty:
             for idx, c_row in cluster_summary.iterrows():
                 surge_tier = c_row['recommended_surge']
@@ -164,7 +180,7 @@ with tab1:
                     color=c_color,
                     fill=True,
                     fill_color=c_color,
-                    fill_opacity=0.6,
+                    fill_opacity=0.5,
                     popup=f"<b>Hotspot Cluster #{c_row['cluster_id']}</b><br>"
                           f"Zone: {c_row['primary_zone']}<br>"
                           f"Ride Requests: {c_row['request_count']}<br>"
