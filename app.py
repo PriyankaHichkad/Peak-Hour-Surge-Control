@@ -154,7 +154,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.subheader(f"Geospatial Demand Clusters & Dispatch Zones at {selected_hour:02d}:00")
     
-    col_map, col_details = st.columns([2.2, 1.0])
+    col_map, col_env = st.columns([2.2, 1.0])
     
     with col_map:
         nyc_map = folium.Map(location=[40.730610, -73.935242], zoom_start=11, tiles="OpenStreetMap")
@@ -181,23 +181,29 @@ with tab1:
                 
         st_folium(nyc_map, width=800, height=480)
         
-    with col_details:
-        st.write("### Active Hotspots Summary")
-        if not cluster_summary.empty:
-            disp_df = cluster_summary[['cluster_id', 'primary_zone', 'request_count', 'cancellation_rate', 'recommended_surge']].copy()
-            disp_df.columns = ['ID', 'Zone', 'Requests', 'Churn Rate', 'Local Surge']
-            disp_df['Churn Rate'] = (disp_df['Churn Rate'] * 100).round(1).astype(str) + "%"
-            disp_df['Local Surge'] = disp_df['Local Surge'].astype(str) + "x"
-            st.dataframe(disp_df, hide_index=True, use_container_width=True)
-        else:
-            st.info("No dense clusters detected for this hour slice. Demand is evenly distributed.")
-            
-        sd_status_text = "Severe Shortage" if global_sd_ratio < 0.5 else ("Balanced" if global_sd_ratio < 1.0 else "High Supply")
+    with col_env:
         st.write("### Environment Status")
-        st.info(f"Precipitation: {df_filtered['precipitation_mm'].mean():.1f} mm/hr\n\n"
-                f"Avg Temperature: {df_filtered['temperature_c'].mean():.1f} °C\n\n"
-                f"Active Fleet Drivers: {df_filtered['hourly_active_drivers'].mean():.0f} drivers\n\n"
-                f"Supply/Demand Ratio: {global_sd_ratio:.2f} ({sd_status_text})")
+        sd_status_text = "Severe Shortage" if global_sd_ratio < 0.5 else ("Balanced" if global_sd_ratio < 1.0 else "High Supply")
+        
+        env_summary_df = pd.DataFrame([
+            {"Metric": "Precipitation", "Value": f"{df_filtered['precipitation_mm'].mean():.1f} mm/hr"},
+            {"Metric": "Avg Temperature", "Value": f"{df_filtered['temperature_c'].mean():.1f} °C"},
+            {"Metric": "Active Drivers", "Value": f"{df_filtered['hourly_active_drivers'].mean():.0f} drivers"},
+            {"Metric": "Supply/Demand Ratio", "Value": f"{global_sd_ratio:.2f} ({sd_status_text})"},
+            {"Metric": "Total Hour Requests", "Value": f"{hourly_requests} rides"}
+        ])
+        st.dataframe(env_summary_df, hide_index=True, use_container_width=True)
+
+    st.markdown("---")
+    st.write("### Active Hotspots Summary")
+    if not cluster_summary.empty:
+        disp_df = cluster_summary[['cluster_id', 'primary_zone', 'request_count', 'cancellation_rate', 'recommended_surge']].copy()
+        disp_df.columns = ['ID', 'Zone', 'Requests', 'Churn Rate', 'Local Surge']
+        disp_df['Churn Rate'] = (disp_df['Churn Rate'] * 100).round(1).astype(str) + "%"
+        disp_df['Local Surge'] = disp_df['Local Surge'].astype(str) + "x"
+        st.dataframe(disp_df, hide_index=True, use_container_width=True)
+    else:
+        st.info("No dense clusters detected for this hour slice. Demand is evenly distributed.")
 
 # TAB 2: Price Elasticity & Surge Simulator
 with tab2:
