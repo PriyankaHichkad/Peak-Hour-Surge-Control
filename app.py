@@ -113,6 +113,10 @@ if not cluster_summary.empty:
         cluster_surges.append(final_cluster_surge)
         
     cluster_summary['recommended_surge'] = cluster_surges
+    cluster_surge_map = dict(zip(cluster_summary['cluster_id'], cluster_summary['recommended_surge']))
+    opt_surge_series = df_clustered['cluster_id'].map(lambda cid: cluster_surge_map.get(cid, opt_multiplier))
+else:
+    opt_surge_series = opt_multiplier
 
 # Helper function to return circle color strictly based on actual Surge Tier value
 def get_surge_color(surge_val):
@@ -125,8 +129,8 @@ def get_surge_color(surge_val):
     else:
         return '#10B981' # Base Price 1.0x: Green
 
-# Calculate KPIs & Comparison
-kpi_comparison = compare_baseline_vs_optimized(df_filtered, opt_multiplier)
+# Calculate KPIs & Comparison using cluster-level dynamic surge allocation
+kpi_comparison = compare_baseline_vs_optimized(df_clustered, opt_surge_series)
 base_kpis = kpi_comparison['baseline']
 opt_kpis = kpi_comparison['optimized']
 

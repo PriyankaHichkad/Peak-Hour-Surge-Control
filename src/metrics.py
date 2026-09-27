@@ -50,27 +50,36 @@ def calculate_marketplace_kpis(df):
 def compare_baseline_vs_optimized(df_raw, opt_surge_multiplier):
     """
     Compares baseline unoptimized marketplace performance vs optimized surge control engine.
+    Supports both global scalar multiplier and Series of per-cluster multipliers.
     """
     baseline_kpis = calculate_marketplace_kpis(df_raw)
     
-    # Create optimized scenario copy
     df_opt = df_raw.copy()
-    df_opt['initial_surge_multiplier'] = opt_surge_multiplier
-    
-    # Recalculate rider cancellation and driver acceptance under optimized multiplier
     from src.elasticity import rider_cancellation_probability, driver_acceptance_probability
     
+    if isinstance(opt_surge_multiplier, (pd.Series, np.ndarray, list)):
+        df_opt['initial_surge_multiplier'] = opt_surge_multiplier
+        p_cancel = df_opt.apply(lambda r: rider_cancellation_probability(r['initial_surge_multiplier'], weather_severity=r.get('weather_severity', 0.0)), axis=1)
+        p_accept = df_opt['initial_surge_multiplier'].apply(lambda m: driver_acceptance_probability(m))
+    else:
+        df_opt['initial_surge_multiplier'] = opt_surge_multiplier
+        p_cancel = rider_cancellation_probability(opt_surge_multiplier, weather_severity=df_opt['weather_severity'].mean())
+        p_accept = driver_acceptance_probability(opt_surge_multiplier)
+        
     np.random.seed(42)
-    p_cancel = rider_cancellation_probability(opt_surge_multiplier, weather_severity=df_opt['weather_severity'].mean())
-    p_accept = driver_acceptance_probability(opt_surge_multiplier)
-    
-    df_opt['rider_cancelled'] = np.random.binomial(1, p_cancel, len(df_opt)) == 1
-    df_opt['driver_accepted'] = np.random.binomial(1, p_accept, len(df_opt)) == 1
+    if isinstance(p_cancel, (pd.Series, np.ndarray)):
+        df_opt['rider_cancelled'] = np.random.binomial(1, p_cancel) == 1
+    else:
+        df_opt['rider_cancelled'] = np.random.binomial(1, p_cancel, len(df_opt)) == 1
+
+    if isinstance(p_accept, (pd.Series, np.ndarray)):
+        df_opt['driver_accepted'] = np.random.binomial(1, p_accept) == 1
+    else:
+        df_opt['driver_accepted'] = np.random.binomial(1, p_accept, len(df_opt)) == 1
+
     df_opt['fulfilled'] = (~df_opt['rider_cancelled']) & df_opt['driver_accepted']
-    
     optimized_kpis = calculate_marketplace_kpis(df_opt)
     
-    # Compute relative lifts
     gmv_lift = ((optimized_kpis['total_gmv_usd'] - baseline_kpis['total_gmv_usd']) / max(1, baseline_kpis['total_gmv_usd'])) * 100
     fulfillment_lift = optimized_kpis['fulfillment_rate'] - baseline_kpis['fulfillment_rate']
     
