@@ -84,18 +84,14 @@ df_clustered, cluster_summary = detect_spatial_hotspots(df_filtered, eps_km=0.35
 # Calculate local cluster surge multipliers dynamically based on hotspot request density vs driver fleet
 cluster_surges = []
 if not cluster_summary.empty:
-    total_cluster_reqs = cluster_summary['request_count'].sum()
-    n_days_in_df = max(1, df_filtered['date'].nunique()) if 'date' in df_filtered.columns else 7
+    avg_req_in_slice = cluster_summary['request_count'].mean()
     
     for idx, c_row in cluster_summary.iterrows():
         c_req = c_row['request_count']
         
-        # Allocate driver fleet based on local cluster request density vs total requests
-        cluster_share = c_req / max(1, total_cluster_reqs)
-        cluster_drivers = hourly_drivers * (0.3 + 0.7 * cluster_share)
-        c_req_per_hr = c_req / n_days_in_df
-        
-        local_sd_ratio = cluster_drivers / max(1, c_req_per_hr)
+        # Local supply/demand ratio is inversely proportional to cluster request density
+        density_factor = c_req / max(1, avg_req_in_slice)
+        local_sd_ratio = max(0.15, global_sd_ratio / (0.5 + 0.5 * density_factor))
         
         cluster_opt = solve_optimal_surge_multiplier(
             base_fare=15.0,
@@ -116,7 +112,7 @@ else:
 
 # Helper function to return circle color strictly based on fine-grained Surge Tier value
 def get_surge_color(surge_val):
-    if surge_val >= 1.20:
+    if surge_val >= 1.18:
         return '#EF4444' # High Surge Peak: Crimson Red
     elif surge_val >= 1.12:
         return '#F97316' # Moderate Surge: Bright Orange
