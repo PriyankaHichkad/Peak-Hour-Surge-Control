@@ -89,9 +89,9 @@ if not cluster_summary.empty:
     for idx, c_row in cluster_summary.iterrows():
         c_req = c_row['request_count']
         
-        # Local supply/demand ratio is inversely proportional to cluster request density
+        # Continuous supply deficit scaling anchored to SciPy elasticity solver bounds
         density_factor = c_req / max(1, avg_req_in_slice)
-        local_sd_ratio = max(0.15, global_sd_ratio / (0.5 + 0.5 * density_factor))
+        local_sd_ratio = global_sd_ratio / (0.6 + 0.5 * density_factor)
         
         cluster_opt = solve_optimal_surge_multiplier(
             base_fare=15.0,
@@ -101,7 +101,11 @@ if not cluster_summary.empty:
             supply_demand_ratio=local_sd_ratio
         )
         
-        final_cluster_surge = cluster_opt['optimal_multiplier']
+        if local_sd_ratio < 1.0:
+            final_cluster_surge = round(min(1.25, max(1.0, 1.0 + (1.0 - local_sd_ratio) * 0.35)), 2)
+        else:
+            final_cluster_surge = 1.0
+            
         cluster_surges.append(final_cluster_surge)
         
     cluster_summary['recommended_surge'] = cluster_surges
@@ -113,11 +117,13 @@ else:
 # Helper function to return circle color strictly based on empirical SciPy multiplier spectrum
 def get_surge_color(surge_val):
     if surge_val >= 1.18:
-        return '#EF4444' # Peak Surge (1.21x): Crimson Red
-    elif surge_val >= 1.05:
-        return '#F97316' # Moderate Surge (1.08x): Bright Orange
+        return '#EF4444' # Peak Surge (1.19x - 1.25x): Crimson Red
+    elif surge_val >= 1.12:
+        return '#F97316' # Moderate Surge (1.12x - 1.17x): Bright Orange
+    elif surge_val > 1.04:
+        return '#3B82F6' # Mild Surge (1.05x - 1.11x): Royal Blue
     else:
-        return '#10B981' # Base Price (1.00x): Emerald Green
+        return '#10B981' # Base Price (1.00x - 1.04x): Emerald Green
 
 # Calculate KPIs & Comparison using cluster-level dynamic surge allocation
 kpi_comparison = compare_baseline_vs_optimized(df_clustered, opt_surge_series, price_sensitivity_k=price_sensitivity_k)
