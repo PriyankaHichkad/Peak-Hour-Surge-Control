@@ -22,16 +22,14 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
-    .main-header { font-size: 2.2rem; font-weight: 700; color: var(--text-color, #1E293B); margin-bottom: 0.2rem; }
-    .sub-header { font-size: 1.0rem; color: var(--text-color, #64748B); opacity: 0.8; margin-bottom: 1.5rem; }
     .metric-card { background-color: var(--secondary-background-color, #F8FAFC); border-radius: 8px; padding: 15px; border-left: 5px solid #3B82F6; }
     .stMetric label { font-size: 0.9rem !important; opacity: 0.85; }
 </style>
 """, unsafe_allow_html=True)
 
 # Header Section
-st.markdown("<div class='main-header'>Urban Mobility Dynamic Surge Pricing & Supply Allocation Engine</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-header'>Real-Time Geospatial Hotspot Detection, Price Elasticity Optimization & 2-Sided Marketplace Control Room</div>", unsafe_allow_html=True)
+st.title("Urban Mobility Dynamic Surge Pricing & Supply Allocation Engine")
+st.markdown("<div style='font-size: 1.05rem; opacity: 0.85; margin-bottom: 1.5rem;'>Real-Time Geospatial Hotspot Detection, Price Elasticity Optimization & 2-Sided Marketplace Control Room</div>", unsafe_allow_html=True)
 
 # Cached Dataset Generation
 @st.cache_data(ttl=3600)
