@@ -22,10 +22,10 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
-    .main-header { font-size: 2.2rem; font-weight: 700; color: #1E293B; margin-bottom: 0.2rem; }
-    .sub-header { font-size: 1.0rem; color: #64748B; margin-bottom: 1.5rem; }
-    .metric-card { background-color: #F8FAFC; border-radius: 8px; padding: 15px; border-left: 5px solid #3B82F6; }
-    .stMetric label { font-size: 0.9rem !important; color: #475569 !important; }
+    .main-header { font-size: 2.2rem; font-weight: 700; color: var(--text-color, #1E293B); margin-bottom: 0.2rem; }
+    .sub-header { font-size: 1.0rem; color: var(--text-color, #64748B); opacity: 0.8; margin-bottom: 1.5rem; }
+    .metric-card { background-color: var(--secondary-background-color, #F8FAFC); border-radius: 8px; padding: 15px; border-left: 5px solid #3B82F6; }
+    .stMetric label { font-size: 0.9rem !important; opacity: 0.85; }
 </style>
 """, unsafe_allow_html=True)
 
