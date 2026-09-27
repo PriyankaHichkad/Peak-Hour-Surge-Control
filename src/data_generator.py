@@ -5,10 +5,10 @@ from src.weather_api import fetch_open_meteo_weather
 from src.data_loader import load_nyc_benchmark_pickups
 from src.elasticity import rider_cancellation_probability, driver_acceptance_probability
 
-def generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=250, seed=42):
+def generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=135, seed=42):
     """
     Combines real NYC spatial pickups & weather API data with simulated 2-sided marketplace telemetry,
-    using unified price elasticity functions imported directly from src.elasticity.
+    incorporating realistic 24-hour diurnal demand & driver supply curves.
     """
     np.random.seed(seed)
     
@@ -30,19 +30,40 @@ def generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=250, seed
         precip = w_row['precipitation_mm']
         severity = w_row['weather_severity']
         
-        # Rush hour demand multipliers
-        morning_rush = 1.6 if (7 <= hour <= 9 and not is_weekend) else 1.0
-        evening_rush = 1.9 if (17 <= hour <= 20 and not is_weekend) else 1.0
-        weekend_night = 1.5 if (21 <= hour or hour <= 2) and is_weekend else 1.0
-        
-        # Weather demand shock
+        # 24-Hour Diurnal Demand & Supply Curve Calibration
+        if 3 <= hour <= 5:
+            # Late Night Off-Peak (Quiet hours)
+            demand_mult = 0.35
+            supply_mult = 0.45
+        elif 7 <= hour <= 9:
+            # Morning Rush
+            demand_mult = 1.75 if not is_weekend else 1.1
+            supply_mult = 1.0 if not is_weekend else 0.8
+        elif 11 <= hour <= 15:
+            # Midday Off-Peak
+            demand_mult = 0.85
+            supply_mult = 1.1
+        elif 17 <= hour <= 20:
+            # Evening Rush Hour
+            demand_mult = 1.95 if not is_weekend else 1.3
+            supply_mult = 0.9 if not is_weekend else 0.9
+        elif (22 <= hour or hour <= 2) and is_weekend:
+            # Weekend Nightlife Spike
+            demand_mult = 1.6
+            supply_mult = 0.65
+        else:
+            # Normal Hours
+            demand_mult = 1.0
+            supply_mult = 1.0
+            
+        # Weather demand shock & supply dip
         weather_shock = 1.0 + (0.8 * severity)
-        
-        hourly_demand_mult = morning_rush * evening_rush * weekend_night * weather_shock
-        n_requests = int(base_requests_per_hour * hourly_demand_mult * np.random.uniform(0.85, 1.15))
-        
-        base_supply = base_requests_per_hour * np.random.uniform(0.8, 1.1)
         weather_supply_dip = 1.0 - (0.35 * severity)
+        
+        hourly_demand_mult = demand_mult * weather_shock
+        n_requests = int(base_requests_per_hour * hourly_demand_mult * np.random.uniform(0.9, 1.1))
+        
+        base_supply = base_requests_per_hour * supply_mult * np.random.uniform(0.85, 1.15)
         active_drivers = int(base_supply * weather_supply_dip)
         
         supply_demand_ratio = active_drivers / max(1, n_requests)
@@ -57,7 +78,6 @@ def generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=250, seed
             sample = pickup_pool.iloc[pool_idx % len(pickup_pool)]
             pool_idx += 1
             
-            # Unified Rider Cancellation & Driver Acceptance calculations from src.elasticity
             cancellation_prob = rider_cancellation_probability(initial_surge, weather_severity=severity)
             rider_cancelled = np.random.binomial(1, cancellation_prob) == 1
             
@@ -93,5 +113,5 @@ def generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=250, seed
 
 if __name__ == "__main__":
     df = generate_hybrid_marketplace_dataset(days=3, base_requests_per_hour=100)
-    print(f"Generated Unified Hybrid Telemetry Dataset: {len(df)} ride requests.")
+    print(f"Generated Diurnal Hybrid Telemetry Dataset: {len(df)} ride requests.")
     print(df.head())

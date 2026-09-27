@@ -62,9 +62,11 @@ elif weather_override == "Heavy Storm (8.0mm)":
 avg_weather_sev = df_filtered['weather_severity'].mean()
 
 # Calculate Dynamic Hourly Supply-Demand Ratio based on selected hour & weather
-hourly_requests = len(df_filtered)
+total_filtered_requests = len(df_filtered)
+n_days = max(1, df_filtered['date'].nunique()) if 'date' in df_filtered.columns else 7
+avg_hourly_requests = total_filtered_requests / n_days
 hourly_drivers = df_filtered['hourly_active_drivers'].mean() if not df_filtered.empty else 100
-global_sd_ratio = hourly_drivers / max(1, hourly_requests)
+global_sd_ratio = hourly_drivers / max(1, avg_hourly_requests)
 
 # Solve Optimal Surge Multiplier M* dynamically driven by hour & weather supply-demand ratio
 opt_solution = solve_optimal_surge_multiplier(
@@ -199,7 +201,7 @@ with tab1:
             {"Metric": "Avg Temperature", "Value": f"{df_filtered['temperature_c'].mean():.1f} °C"},
             {"Metric": "Active Drivers", "Value": f"{df_filtered['hourly_active_drivers'].mean():.0f} drivers"},
             {"Metric": "Supply/Demand Ratio", "Value": f"{global_sd_ratio:.2f} ({sd_status_text})"},
-            {"Metric": "Total Hour Requests", "Value": f"{hourly_requests} rides"}
+            {"Metric": "Hourly Avg Demand", "Value": f"{int(avg_hourly_requests)} rides/hr"}
         ])
         st.dataframe(env_summary_df, hide_index=True, use_container_width=True)
 
