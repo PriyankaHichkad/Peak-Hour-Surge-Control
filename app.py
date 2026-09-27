@@ -29,12 +29,12 @@ st.markdown("""
 
 # Header Section
 st.title("Urban Mobility Dynamic Surge Pricing & Supply Allocation Engine")
-st.markdown("<div style='font-size: 1.05rem; opacity: 0.85; margin-bottom: 1.5rem;'>Real-Time Geospatial Hotspot Detection, Price Elasticity Optimization & 2-Sided Marketplace Control Room</div>", unsafe_allow_html=True)
+st.markdown("<div style='font-size: 1.05rem; opacity: 0.85; margin-bottom: 1.5rem;'>Real-Time Geospatial Hotspot Detection, Price Elasticity Optimization & 2-Sided Marketplace Control Room (Ingested 22k+ NYC GPS Pickup Logs)</div>", unsafe_allow_html=True)
 
 # Cached Dataset Generation
 @st.cache_data(ttl=3600)
 def load_cached_data():
-    return generate_hybrid_marketplace_dataset(days=5, base_requests_per_hour=140, seed=42)
+    return generate_hybrid_marketplace_dataset(days=7, base_requests_per_hour=135, seed=42)
 
 df_all = load_cached_data()
 
