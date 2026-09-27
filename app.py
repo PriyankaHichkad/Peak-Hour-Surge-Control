@@ -206,6 +206,9 @@ with tab2:
     # 1. Executive KPIs & Unit Economics
     st.subheader("1. Marketplace Financial & Operational Performance Comparison")
     
+    trip_diff = opt_kpis['fulfilled_trips'] - base_kpis['fulfilled_trips']
+    rate_diff = round(opt_kpis['driver_hourly_rate_usd'] - base_kpis['driver_hourly_rate_usd'], 2)
+    
     comp_data = {
         'Metric': ['Total Hourly Requests', 'Fulfilled Trips', 'Marketplace Fulfillment Rate', 'Rider Cancellation Rate', 'Hourly Gross Merchandise Value (GMV)', 'Driver Hourly Earnings Rate', 'Customer NPS Index'],
         'Baseline (Unoptimized)': [
@@ -228,12 +231,12 @@ with tab2:
         ],
         'Impact / Lift': [
             "-",
-            f"+{opt_kpis['fulfilled_trips'] - base_kpis['fulfilled_trips']:,} trips",
+            f"{trip_diff:+} trips",
             f"{kpi_comparison['fulfillment_lift_pct_pts']:+} pts",
             f"{round(opt_kpis['cancellation_rate'] - base_kpis['cancellation_rate'], 1):+} pts",
-            f"+{kpi_comparison['gmv_lift_pct']}% GMV",
-            f"+${round(opt_kpis['driver_hourly_rate_usd'] - base_kpis['driver_hourly_rate_usd'], 2)}/hr",
-            f"+{opt_kpis['nps_index_score'] - base_kpis['nps_index_score']} pts"
+            f"{kpi_comparison['gmv_lift_pct']:+} % GMV",
+            f"{'+$' if rate_diff >= 0 else '-$'}{abs(rate_diff):.2f}/hr",
+            f"{opt_kpis['nps_index_score'] - base_kpis['nps_index_score']:+} pts"
         ]
     }
     
