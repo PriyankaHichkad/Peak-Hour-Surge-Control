@@ -91,8 +91,8 @@ def solve_optimal_surge_multiplier(base_fare=15.0, price_sensitivity_k=DEFAULT_P
         
     def objective_fn(m):
         p_cancel = rider_cancellation_probability(m, price_sensitivity_k=price_sensitivity_k, weather_severity=weather_severity)
-        if p_cancel > max_churn_threshold:
-            return 1e6 * (p_cancel - max_churn_threshold + 1.0)
+        if p_cancel > effective_churn_cap:
+            return 1e6 * (p_cancel - effective_churn_cap + 1.0)
         p_accept = driver_acceptance_probability(m)
         fulfillment = min(1.0, (1.0 - p_cancel) * p_accept * min(1.0, supply_demand_ratio * (1.0 + 0.3 * (m - 1.0))))
         gmv = (base_fare * m) * fulfillment
