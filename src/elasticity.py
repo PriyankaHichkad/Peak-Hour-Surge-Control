@@ -18,9 +18,10 @@ def rider_cancellation_probability(multiplier, price_sensitivity_k=DEFAULT_PRICE
 def driver_acceptance_probability(multiplier, incentive_lambda=DEFAULT_DRIVER_INCENTIVE_LAMBDA):
     """
     Driver Acceptance Probability as a function of Surge Multiplier Bonus.
+    Base acceptance ~78%-85% at 1.0x base fare, scaling up to 96% at higher surge payouts.
     """
-    prob = 1.0 / (1.0 + np.exp(-incentive_lambda * (multiplier - 1.1)))
-    return np.clip(prob, 0.25, 0.98)
+    prob = 0.78 + 0.20 / (1.0 + np.exp(-incentive_lambda * (multiplier - 1.2)))
+    return np.clip(prob, 0.50, 0.98)
 
 def compute_marketplace_fulfillment_curve(multipliers, base_fare=15.0, price_sensitivity_k=DEFAULT_PRICE_SENSITIVITY_K, weather_severity=0.0, supply_demand_ratio=1.0):
     """
