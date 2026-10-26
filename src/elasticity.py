@@ -9,10 +9,12 @@ DEFAULT_DRIVER_INCENTIVE_LAMBDA = 3.2
 def rider_cancellation_probability(multiplier, price_sensitivity_k=DEFAULT_PRICE_SENSITIVITY_K, inflection_m0=DEFAULT_INFLECTION_M0, weather_severity=0.0):
     """
     Rider Churn Probability as a function of Surge Multiplier and Weather Urgency.
-    Baseline non-surged cancellation ~10%-14%, scaling up smoothly with surge.
+    Baseline non-surged cancellation ~12%-14% at 1.0x, scaling up smoothly with surge.
     """
     effective_k = price_sensitivity_k / (1.0 + 0.5 * weather_severity)
-    prob = 0.10 + 0.75 / (1.0 + np.exp(-effective_k * (multiplier - inflection_m0)))
+    sigmoid = 1.0 / (1.0 + np.exp(-effective_k * (multiplier - inflection_m0)))
+    base_sigmoid = 1.0 / (1.0 + np.exp(-effective_k * (1.0 - inflection_m0)))
+    prob = 0.12 + 0.75 * (sigmoid - base_sigmoid) / (1.0 - base_sigmoid)
     return np.clip(prob, 0.05, 0.95)
 
 def driver_acceptance_probability(multiplier, incentive_lambda=DEFAULT_DRIVER_INCENTIVE_LAMBDA):
@@ -59,14 +61,13 @@ def compute_marketplace_fulfillment_curve(multipliers, base_fare=15.0, price_sen
 
 def solve_optimal_surge_multiplier(base_fare=15.0, price_sensitivity_k=DEFAULT_PRICE_SENSITIVITY_K, weather_severity=0.0, max_churn_threshold=0.35, supply_demand_ratio=1.0):
     """
-    Solves for optimal surge multiplier M* dynamically driven by local supply-demand ratio and time/weather features.
-    If supply >= demand (ratio >= 1.0), surge is 1.0x.
-    If severe deficit (ratio < 0.5), surge increases to attract drivers and balance queue.
+    Solves for optimal surge multiplier M* dynamically driven by local supply-demand ratio and time/weather features
+    using SciPy bounded continuous optimization (minimize_scalar).
     """
-    if supply_demand_ratio >= 1.15:
-        # High driver availability relative to demand -> Base price 1.0x
-        multipliers = np.linspace(1.0, 3.0, 201)
-        df_curve = compute_marketplace_fulfillment_curve(multipliers, base_fare, price_sensitivity_k, weather_severity, supply_demand_ratio)
+    multipliers = np.linspace(1.0, 3.0, 201)
+    df_curve = compute_marketplace_fulfillment_curve(multipliers, base_fare, price_sensitivity_k, weather_severity, supply_demand_ratio)
+    
+    if supply_demand_ratio >= 1.0:
         return {
             'optimal_multiplier': 1.0,
             'continuous_scipy_m': 1.0,
@@ -77,37 +78,36 @@ def solve_optimal_surge_multiplier(base_fare=15.0, price_sensitivity_k=DEFAULT_P
             'curve_df': df_curve
         }
         
-    multipliers = np.linspace(1.0, 3.0, 201)
-    df_curve = compute_marketplace_fulfillment_curve(multipliers, base_fare, price_sensitivity_k, weather_severity, supply_demand_ratio)
-    
-    # During supply deficits (S/D < 0.95), allow deficit surge elasticity up to max(max_churn_threshold, 0.40) to attract drivers
-    effective_churn_cap = max(max_churn_threshold, 0.40) if supply_demand_ratio < 0.95 else max_churn_threshold
-    valid_candidates = df_curve[df_curve['rider_cancel_prob'] <= effective_churn_cap]
-    
-    if valid_candidates.empty:
-        best_row = df_curve.loc[df_curve['rider_cancel_prob'].idxmin()]
-    else:
-        best_row = valid_candidates.loc[valid_candidates['expected_gmv_per_req'].idxmax()]
-        
     def objective_fn(m):
         p_cancel = rider_cancellation_probability(m, price_sensitivity_k=price_sensitivity_k, weather_severity=weather_severity)
-        if p_cancel > effective_churn_cap:
-            return 1e6 * (p_cancel - effective_churn_cap + 1.0)
+        if p_cancel > max_churn_threshold:
+            return 1e5 * (p_cancel - max_churn_threshold + 1.0)
         p_accept = driver_acceptance_probability(m)
-        fulfillment = min(1.0, (1.0 - p_cancel) * p_accept * min(1.0, supply_demand_ratio * (1.0 + 0.3 * (m - 1.0))))
+        conversion = 1.0 - p_cancel
+        supply_response = min(1.0, supply_demand_ratio * (1.0 + 0.35 * (m - 1.0)))
+        fulfillment = min(conversion, supply_response) * p_accept
         gmv = (base_fare * m) * fulfillment
-        return -gmv
+        
+        imbalance = (conversion - supply_response)**2
+        churn_friction = 1.5 * (p_cancel - 0.12)**2
+        
+        net_welfare = gmv - 2.5 * base_fare * imbalance - 1.5 * base_fare * churn_friction
+        return -net_welfare
 
-    scipy_res = minimize_scalar(objective_fn, bounds=(1.0, 3.0), method='bounded')
+    scipy_res = minimize_scalar(objective_fn, bounds=(1.0, 1.30), method='bounded')
     optimal_continuous_m = round(float(scipy_res.x), 2)
     
+    # Lookup curve statistics at optimal multiplier
+    closest_idx = (np.abs(df_curve['surge_multiplier'] - optimal_continuous_m)).argmin()
+    opt_row = df_curve.iloc[closest_idx]
+    
     return {
-        'optimal_multiplier': float(best_row['surge_multiplier']),
+        'optimal_multiplier': optimal_continuous_m,
         'continuous_scipy_m': optimal_continuous_m,
-        'expected_fulfillment_rate': float(best_row['fulfillment_rate']),
-        'expected_rider_churn': float(best_row['rider_cancel_prob']),
-        'expected_driver_acceptance': float(best_row['driver_accept_prob']),
-        'expected_gmv_per_request': float(best_row['expected_gmv_per_req']),
+        'expected_fulfillment_rate': float(opt_row['fulfillment_rate']),
+        'expected_rider_churn': float(opt_row['rider_cancel_prob']),
+        'expected_driver_acceptance': float(opt_row['driver_accept_prob']),
+        'expected_gmv_per_request': float(opt_row['expected_gmv_per_req']),
         'curve_df': df_curve
     }
 

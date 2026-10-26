@@ -68,30 +68,48 @@ avg_hourly_requests = total_filtered_requests / n_days
 hourly_drivers = df_filtered['hourly_active_drivers'].mean() if not df_filtered.empty else 100
 global_sd_ratio = hourly_drivers / max(1, avg_hourly_requests)
 
-# Solve Optimal Surge Multiplier M* dynamically driven by hour & weather supply-demand ratio
+# Build or retrieve cached 24h demand forecast model
+@st.cache_resource
+def get_cached_forecast_model(df):
+    model_dict, _ = build_demand_forecast_model(df)
+    return model_dict
+
+forecast_model = get_cached_forecast_model(df_all)
+forecast_24h = forecast_next_24h_demand(forecast_model, weather_severity_forecast=avg_weather_sev)
+
+# Anticipated demand from Meta Prophet for the selected hour
+if not forecast_24h.empty and 'hour' in forecast_24h.columns:
+    pred_subset = forecast_24h[forecast_24h['hour'] == selected_hour]
+    pred_hour_demand = pred_subset['predicted_demand'].values[0] if len(pred_subset) > 0 else avg_hourly_requests
+else:
+    pred_hour_demand = avg_hourly_requests
+
+# Blend observed volume with Prophet demand forecast to establish anticipated supply-demand ratio
+forecasted_sd_ratio = hourly_drivers / max(1, pred_hour_demand)
+blended_sd_ratio = 0.5 * global_sd_ratio + 0.5 * forecasted_sd_ratio
+
+# Solve Optimal Surge Multiplier M* dynamically driven by Prophet forecasted demand & SciPy solver
 opt_solution = solve_optimal_surge_multiplier(
     base_fare=15.0, 
     price_sensitivity_k=price_sensitivity_k, 
     weather_severity=avg_weather_sev, 
     max_churn_threshold=max_churn_threshold,
-    supply_demand_ratio=global_sd_ratio
+    supply_demand_ratio=blended_sd_ratio
 )
 opt_multiplier = opt_solution['optimal_multiplier']
 
 # Run Granular DBSCAN Clustering (eps_km=0.35 / 350 meters)
 df_clustered, cluster_summary = detect_spatial_hotspots(df_filtered, eps_km=0.35, min_samples=5)
 
-# Calculate local cluster surge multipliers dynamically based on hotspot request density vs driver fleet
+# Calculate local cluster surge multipliers directly via SciPy elasticity solver
 cluster_surges = []
 if not cluster_summary.empty:
     avg_req_in_slice = cluster_summary['request_count'].mean()
     
     for idx, c_row in cluster_summary.iterrows():
         c_req = c_row['request_count']
-        
-        # Continuous supply deficit scaling anchored to SciPy elasticity solver bounds
         density_factor = c_req / max(1, avg_req_in_slice)
-        local_sd_ratio = global_sd_ratio / (0.6 + 0.5 * density_factor)
+        local_sd_ratio = blended_sd_ratio / (0.6 + 0.5 * density_factor)
         
         cluster_opt = solve_optimal_surge_multiplier(
             base_fare=15.0,
@@ -101,11 +119,7 @@ if not cluster_summary.empty:
             supply_demand_ratio=local_sd_ratio
         )
         
-        if local_sd_ratio < 1.0:
-            final_cluster_surge = round(min(1.25, max(1.0, 1.0 + (1.0 - local_sd_ratio) * 0.35)), 2)
-        else:
-            final_cluster_surge = 1.0
-            
+        final_cluster_surge = cluster_opt['optimal_multiplier']
         cluster_surges.append(final_cluster_surge)
         
     cluster_summary['recommended_surge'] = cluster_surges

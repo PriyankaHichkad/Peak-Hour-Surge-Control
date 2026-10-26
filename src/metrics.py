@@ -78,6 +78,18 @@ def compare_baseline_vs_optimized(df_raw, opt_surge_multiplier, price_sensitivit
         df_opt['driver_accepted'] = np.random.binomial(1, p_accept, len(df_opt)) == 1
 
     df_opt['fulfilled'] = (~df_opt['rider_cancelled']) & df_opt['driver_accepted']
+    
+    # Enforce physical driver fleet throughput capacity (max ~2.0 trips per driver-hour)
+    active_drivers = df_opt['hourly_active_drivers'].mean() if 'hourly_active_drivers' in df_opt else 100
+    n_hours = max(1, df_opt['hour'].nunique()) if 'hour' in df_opt else 1
+    max_fleet_capacity = int(active_drivers * 2.0 * n_hours)
+    
+    fulfilled_indices = df_opt[df_opt['fulfilled']].index
+    if len(fulfilled_indices) > max_fleet_capacity:
+        dropped_idx = fulfilled_indices[max_fleet_capacity:]
+        df_opt.loc[dropped_idx, 'fulfilled'] = False
+        df_opt.loc[dropped_idx, 'driver_accepted'] = False
+        
     optimized_kpis = calculate_marketplace_kpis(df_opt)
     
     gmv_lift = ((optimized_kpis['total_gmv_usd'] - baseline_kpis['total_gmv_usd']) / max(1, baseline_kpis['total_gmv_usd'])) * 100

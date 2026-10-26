@@ -8,11 +8,11 @@ from src.elasticity import (
 
 def test_baseline_cancellation_floor():
     """
-    Documents and verifies that baseline cancellation at 1.0x surge is ~32%
-    under default price sensitivity (k=2.2).
+    Documents and verifies that baseline cancellation at 1.0x surge is ~12%
+    under default price sensitivity (k=2.2), matching documentation.
     """
     churn_1_0 = rider_cancellation_probability(1.0)
-    assert 0.30 <= churn_1_0 <= 0.35, f"Expected baseline churn ~32%, got {churn_1_0:.1%}"
+    assert 0.10 <= churn_1_0 <= 0.15, f"Expected baseline churn ~12%, got {churn_1_0:.1%}"
 
 def test_cancellation_guardrail_behavior():
     """

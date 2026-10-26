@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 from src.data_generator import generate_hybrid_marketplace_dataset
-from src.forecasting import build_demand_forecast_model, forecast_next_24h_demand
+from src.forecasting import build_demand_forecast_model, forecast_next_24h_demand, evaluate_forecast_backtest
 
 def test_forecasting_pipeline():
     df_telemetry = generate_hybrid_marketplace_dataset(days=3, base_requests_per_hour=80, seed=42)
@@ -20,3 +20,12 @@ def test_forecasting_pipeline():
     assert (future_24h['predicted_demand'] >= 0).all()
     if 'is_weekend' in future_24h.columns:
         assert future_24h['is_weekend'].iloc[0] == True
+
+def test_forecasting_backtest_evaluation():
+    df_telemetry = generate_hybrid_marketplace_dataset(days=4, base_requests_per_hour=80, seed=42)
+    backtest_res = evaluate_forecast_backtest(df_telemetry, train_days=3)
+    assert 'test_mae' in backtest_res
+    assert 'test_rmse' in backtest_res
+    assert backtest_res['test_mae'] >= 0.0
+    assert backtest_res['test_rmse'] >= 0.0
+    assert backtest_res['test_hours'] > 0

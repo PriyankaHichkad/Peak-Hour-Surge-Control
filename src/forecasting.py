@@ -109,3 +109,60 @@ def forecast_next_24h_demand(model_dict, base_date=None, weather_severity_foreca
     feature_cols = model_dict['feature_cols']
     future_df['predicted_demand'] = np.maximum(0, np.round(ridge_model.predict(future_df[feature_cols])))
     return future_df
+
+def evaluate_forecast_backtest(df_telemetry, train_days=5):
+    """
+    Evaluates forecasting accuracy on unseen future observations using temporal train/test split.
+    Trains on first train_days and tests on holdout observations, returning MAE, RMSE, and WAPE.
+    """
+    unique_dates = sorted(df_telemetry['date'].unique())
+    if len(unique_dates) <= 1:
+        return {'test_mae': 0.0, 'test_rmse': 0.0, 'test_wape': 0.0, 'test_hours': 0, 'model_type': 'N/A'}
+        
+    split_idx = min(train_days, len(unique_dates) - 1)
+    train_dates = unique_dates[:split_idx]
+    test_dates = unique_dates[split_idx:]
+    
+    train_df = df_telemetry[df_telemetry['date'].isin(train_dates)]
+    test_df = df_telemetry[df_telemetry['date'].isin(test_dates)]
+    
+    model_dict, _ = build_demand_forecast_model(train_df)
+    
+    test_hourly = test_df.groupby(['date', 'hour', 'day_of_week', 'is_weekend']).agg({
+        'ride_id': 'count',
+        'precipitation_mm': 'mean',
+        'weather_severity': 'mean',
+        'temperature_c': 'mean'
+    }).reset_index().rename(columns={'ride_id': 'actual_demand'})
+    
+    test_hourly['timestamp'] = pd.to_datetime(test_hourly['date'].astype(str) + ' ' + test_hourly['hour'].astype(str) + ':00:00')
+    test_hourly = test_hourly.sort_values('timestamp').reset_index(drop=True)
+    
+    if model_dict['model_type'] == 'Prophet':
+        m = model_dict['model_obj']
+        prophet_test = pd.DataFrame({
+            'ds': test_hourly['timestamp'],
+            'precipitation_mm': test_hourly['precipitation_mm'],
+            'weather_severity': test_hourly['weather_severity']
+        })
+        preds = m.predict(prophet_test)
+        y_pred = np.maximum(0, np.round(preds['yhat'].values))
+    else:
+        test_hourly['hour_sin'] = np.sin(2 * np.pi * test_hourly['hour'] / 24.0)
+        test_hourly['hour_cos'] = np.cos(2 * np.pi * test_hourly['hour'] / 24.0)
+        feature_cols = model_dict['feature_cols']
+        ridge = model_dict['model_obj']
+        y_pred = np.maximum(0, np.round(ridge.predict(test_hourly[feature_cols])))
+        
+    y_true = test_hourly['actual_demand'].values
+    mae = float(np.mean(np.abs(y_true - y_pred)))
+    rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+    wape = float(np.sum(np.abs(y_true - y_pred)) / max(1, np.sum(y_true)))
+    
+    return {
+        'test_mae': round(mae, 2),
+        'test_rmse': round(rmse, 2),
+        'test_wape': round(wape, 4),
+        'test_hours': len(y_true),
+        'model_type': model_dict['model_type']
+    }

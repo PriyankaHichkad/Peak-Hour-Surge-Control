@@ -11,6 +11,7 @@ ENV/
 .ipynb_checkpoints
 data/raw/*
 !data/raw/.gitkeep
+!data/raw/nyc_uber_benchmark_pickups.csv
 data/processed/*
 !data/processed/.gitkeep
 data/Uber Dataset/*

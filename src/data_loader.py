@@ -79,7 +79,7 @@ def load_nyc_benchmark_pickups(n_samples=5000, seed=42):
             df_csv = pd.read_csv(DEFAULT_RAW_CSV)
             if len(df_csv) >= n_samples:
                 return df_csv.sample(n=n_samples, random_state=seed).reset_index(drop=True)
-            return df_csv
+            return df_csv.sample(n=n_samples, replace=True, random_state=seed).reset_index(drop=True)
         except Exception as e:
             print(f"[DataLoader Warning] Could not load fallback CSV ({e}).")
 

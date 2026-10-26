@@ -46,11 +46,7 @@ def compute_cluster_surge_series(df_slice, price_sensitivity_k=2.2, max_churn_th
                 supply_demand_ratio=local_sd_ratio
             )
             
-            if local_sd_ratio < 1.0:
-                final_cluster_surge = round(min(1.25, max(1.0, 1.0 + (1.0 - local_sd_ratio) * 0.35)), 2)
-            else:
-                final_cluster_surge = 1.0
-                
+            final_cluster_surge = cluster_opt['optimal_multiplier']
             cluster_surges.append(final_cluster_surge)
             
         cluster_summary['recommended_surge'] = cluster_surges
