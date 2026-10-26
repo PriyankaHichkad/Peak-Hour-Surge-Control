@@ -10,9 +10,11 @@ def compute_cluster_surge_series(df_slice, price_sensitivity_k=2.2, max_churn_th
     Computes per-request optimized surge multipliers using DBSCAN spatial clustering and 
     SciPy elasticity solver matching app.py control room logic.
     """
-    hourly_requests = len(df_slice)
+    total_slice_requests = len(df_slice)
+    n_days = max(1, df_slice['date'].nunique()) if 'date' in df_slice.columns else 7
+    avg_hourly_requests = total_slice_requests / n_days
     hourly_drivers = df_slice['hourly_active_drivers'].mean() if not df_slice.empty else 100
-    global_sd_ratio = hourly_drivers / max(1, hourly_requests)
+    global_sd_ratio = hourly_drivers / max(1, avg_hourly_requests)
     avg_weather_sev = df_slice['weather_severity'].mean()
 
     # Solve optimal global surge
@@ -34,7 +36,7 @@ def compute_cluster_surge_series(df_slice, price_sensitivity_k=2.2, max_churn_th
         for idx, c_row in cluster_summary.iterrows():
             c_req = c_row['request_count']
             density_factor = c_req / max(1, avg_req_in_slice)
-            local_sd_ratio = max(0.15, global_sd_ratio / (0.4 + 0.8 * density_factor))
+            local_sd_ratio = global_sd_ratio / (0.6 + 0.5 * density_factor)
             
             cluster_opt = solve_optimal_surge_multiplier(
                 base_fare=15.0,
@@ -44,13 +46,9 @@ def compute_cluster_surge_series(df_slice, price_sensitivity_k=2.2, max_churn_th
                 supply_demand_ratio=local_sd_ratio
             )
             
-            # SciPy solver optimal surge multiplier
-            final_cluster_surge = cluster_opt['optimal_multiplier']
-            if density_factor > 1.8 and final_cluster_surge < 1.15:
-                final_cluster_surge = 1.25
-            elif density_factor > 1.2 and final_cluster_surge < 1.10:
-                final_cluster_surge = 1.18
-            elif density_factor < 0.6 and global_sd_ratio > 0.8:
+            if local_sd_ratio < 1.0:
+                final_cluster_surge = round(min(1.25, max(1.0, 1.0 + (1.0 - local_sd_ratio) * 0.35)), 2)
+            else:
                 final_cluster_surge = 1.0
                 
             cluster_surges.append(final_cluster_surge)
