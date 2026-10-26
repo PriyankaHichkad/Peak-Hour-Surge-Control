@@ -81,16 +81,21 @@ def forecast_next_24h_demand(model_dict, base_date=None, weather_severity_foreca
         future_24['predicted_demand'] = np.maximum(0, np.round(future_24['predicted_demand']))
         return future_24
         
+    base_ts = pd.to_datetime(base_date)
+    timestamps = pd.date_range(start=base_ts, periods=24, freq='h')
+    
     ridge_model = model_dict['model_obj']
     future_hours = []
     
-    for h in range(24):
+    for ts in timestamps:
+        h = ts.hour
+        dow = ts.dayofweek
+        is_wknd = dow >= 5
         h_sin = np.sin(2 * np.pi * h / 24.0)
         h_cos = np.cos(2 * np.pi * h / 24.0)
-        dow = 4
-        is_wknd = False
         
         future_hours.append({
+            'timestamp': ts,
             'hour': h,
             'day_of_week': dow,
             'is_weekend': is_wknd,

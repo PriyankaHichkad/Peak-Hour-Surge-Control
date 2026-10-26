@@ -11,8 +11,12 @@ def test_forecasting_pipeline():
     assert 'model_type' in model_dict
     assert 'predicted_demand' in hourly_df.columns
     
-    # Test 24h forecasting
-    future_24h = forecast_next_24h_demand(model_dict, weather_severity_forecast=0.2)
+    # Test 24h forecasting with custom base_date (Sunday)
+    sunday_date = pd.Timestamp("2026-10-25").date() # Sunday
+    future_24h = forecast_next_24h_demand(model_dict, base_date=sunday_date, weather_severity_forecast=0.2)
     assert len(future_24h) == 24
     assert 'predicted_demand' in future_24h.columns
+    assert 'timestamp' in future_24h.columns
     assert (future_24h['predicted_demand'] >= 0).all()
+    if 'is_weekend' in future_24h.columns:
+        assert future_24h['is_weekend'].iloc[0] == True
