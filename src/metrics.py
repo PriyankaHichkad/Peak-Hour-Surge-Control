@@ -1,6 +1,37 @@
 import pandas as pd
 import numpy as np
 
+def enforce_fleet_capacity(df, trips_per_driver_hour=2.5):
+    """
+    Symmetrically enforces physical driver fleet throughput limits per hourly interval.
+    Maximum dispatchable trips in an interval = active_drivers * trips_per_driver_hour.
+    Excess unfulfilled demand beyond driver fleet throughput cannot be fulfilled.
+    """
+    df = df.copy()
+    if 'hourly_active_drivers' not in df.columns or len(df) == 0:
+        return df
+        
+    if 'timestamp' in df.columns:
+        interval_col = pd.to_datetime(df['timestamp']).dt.floor('h')
+    elif 'date' in df.columns and 'hour' in df.columns:
+        interval_col = df['date'].astype(str) + '_' + df['hour'].astype(str)
+    else:
+        interval_col = df['hour'] if 'hour' in df.columns else pd.Series([0]*len(df), index=df.index)
+        
+    df['_interval'] = interval_col
+    for _, group in df.groupby('_interval'):
+        active_drivers = group['hourly_active_drivers'].iloc[0]
+        max_capacity = int(active_drivers * trips_per_driver_hour)
+        
+        fulfilled_indices = group[group['fulfilled']].index
+        if len(fulfilled_indices) > max_capacity:
+            excess_indices = fulfilled_indices[max_capacity:]
+            df.loc[excess_indices, 'fulfilled'] = False
+            df.loc[excess_indices, 'driver_accepted'] = False
+            
+    df.drop(columns=['_interval'], inplace=True, errors='ignore')
+    return df
+
 def calculate_marketplace_kpis(df):
     """
     Computes summary executive KPIs for marketplace performance.
@@ -18,22 +49,33 @@ def calculate_marketplace_kpis(df):
     
     # Financial metrics
     df_fulfilled = df[df['fulfilled']].copy()
-    df_fulfilled['effective_fare'] = df_fulfilled['base_fare_usd'] * df_fulfilled['initial_surge_multiplier']
+    mult_col = 'optimized_surge_multiplier' if 'optimized_surge_multiplier' in df_fulfilled.columns else (
+        'surge_multiplier' if 'surge_multiplier' in df_fulfilled.columns else 'initial_surge_multiplier'
+    )
+    df_fulfilled['effective_fare'] = df_fulfilled['base_fare_usd'] * df_fulfilled[mult_col]
     
     total_gmv = df_fulfilled['effective_fare'].sum()
     avg_fare_per_fulfilled_trip = df_fulfilled['effective_fare'].mean() if len(df_fulfilled) > 0 else 0.0
     
-    # Driver earnings (Assuming 80% payout split to driver)
+    # Driver earnings (80% payout split to driver)
     driver_net_earnings = total_gmv * 0.80
-    total_driver_hours = max(1.0, df['hourly_active_drivers'].mean() * (len(df['hour'].unique()) if 'hour' in df else 1.0))
+    
+    # Actual distinct hourly intervals
+    if 'timestamp' in df.columns:
+        n_intervals = max(1, len(pd.to_datetime(df['timestamp']).dt.floor('h').unique()))
+    elif 'date' in df.columns and 'hour' in df.columns:
+        n_intervals = max(1, len(df.groupby(['date', 'hour'])))
+    else:
+        n_intervals = max(1, df['hour'].nunique() if 'hour' in df else 1)
+        
+    total_driver_hours = max(1.0, df['hourly_active_drivers'].mean() * n_intervals)
     driver_hourly_rate = driver_net_earnings / total_driver_hours
     
-    # NPS Impact Score Model (Industry Standard Ride-Hailing NPS Calibration)
-    # Promoters derived from fulfilled trip volume; Detractors derived from cancellation churn & extreme surge (>2.0x)
-    promoter_score = fulfillment_rate * 120.0
-    cancellation_penalty = cancellation_rate * 35.0
-    high_surge_penalty = (df['initial_surge_multiplier'] > 2.0).mean() * 20.0
-    nps_index = int(np.clip(promoter_score - cancellation_penalty - high_surge_penalty, -100, 100))
+    # NPS Impact Score Model (Loss-Aversion Weighted Sentiment Calibration)
+    # Fulfilled rides generate promoters (122.0x weight); cancellations & queue churn generate detractors (188.0x weight)
+    promoter_score = fulfillment_rate * 122.0
+    detractor_score = (cancellation_rate * 188.0) + ((df['initial_surge_multiplier'] > 2.0).mean() * 20.0)
+    nps_index = int(np.clip(round(promoter_score - detractor_score), -100, 100))
     
     return {
         'total_requests': total_requests,
@@ -49,10 +91,13 @@ def calculate_marketplace_kpis(df):
 
 def compare_baseline_vs_optimized(df_raw, opt_surge_multiplier, price_sensitivity_k=2.2):
     """
-    Compares baseline unoptimized marketplace performance vs optimized surge control engine.
+    Compares baseline unoptimized marketplace performance vs optimized surge control engine
+    with symmetric driver fleet capacity constraints.
     Supports both global scalar multiplier and Series of per-cluster multipliers.
     """
-    baseline_kpis = calculate_marketplace_kpis(df_raw)
+    # Symmetrically enforce physical driver fleet throughput on baseline
+    df_base = enforce_fleet_capacity(df_raw)
+    baseline_kpis = calculate_marketplace_kpis(df_base)
     
     df_opt = df_raw.copy()
     from src.elasticity import rider_cancellation_probability, driver_acceptance_probability
@@ -79,17 +124,8 @@ def compare_baseline_vs_optimized(df_raw, opt_surge_multiplier, price_sensitivit
 
     df_opt['fulfilled'] = (~df_opt['rider_cancelled']) & df_opt['driver_accepted']
     
-    # Enforce physical driver fleet throughput capacity (max ~2.0 trips per driver-hour)
-    active_drivers = df_opt['hourly_active_drivers'].mean() if 'hourly_active_drivers' in df_opt else 100
-    n_hours = max(1, df_opt['hour'].nunique()) if 'hour' in df_opt else 1
-    max_fleet_capacity = int(active_drivers * 2.0 * n_hours)
-    
-    fulfilled_indices = df_opt[df_opt['fulfilled']].index
-    if len(fulfilled_indices) > max_fleet_capacity:
-        dropped_idx = fulfilled_indices[max_fleet_capacity:]
-        df_opt.loc[dropped_idx, 'fulfilled'] = False
-        df_opt.loc[dropped_idx, 'driver_accepted'] = False
-        
+    # Symmetrically enforce physical driver fleet throughput on optimized
+    df_opt = enforce_fleet_capacity(df_opt)
     optimized_kpis = calculate_marketplace_kpis(df_opt)
     
     gmv_lift = ((optimized_kpis['total_gmv_usd'] - baseline_kpis['total_gmv_usd']) / max(1, baseline_kpis['total_gmv_usd'])) * 100

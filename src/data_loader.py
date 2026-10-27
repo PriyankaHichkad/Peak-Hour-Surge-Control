@@ -77,6 +77,8 @@ def load_nyc_benchmark_pickups(n_samples=5000, seed=42):
     if os.path.exists(DEFAULT_RAW_CSV):
         try:
             df_csv = pd.read_csv(DEFAULT_RAW_CSV)
+            if 'pickup_id' not in df_csv.columns:
+                df_csv['pickup_id'] = [f"PKP_{100000 + i}" for i in range(len(df_csv))]
             if len(df_csv) >= n_samples:
                 return df_csv.sample(n=n_samples, random_state=seed).reset_index(drop=True)
             return df_csv.sample(n=n_samples, replace=True, random_state=seed).reset_index(drop=True)

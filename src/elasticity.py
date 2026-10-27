@@ -97,6 +97,15 @@ def solve_optimal_surge_multiplier(base_fare=15.0, price_sensitivity_k=DEFAULT_P
     scipy_res = minimize_scalar(objective_fn, bounds=(1.0, 1.30), method='bounded')
     optimal_continuous_m = round(float(scipy_res.x), 2)
     
+    # Hard post-optimization feasibility check for rider cancellation guardrail
+    actual_churn = rider_cancellation_probability(optimal_continuous_m, price_sensitivity_k=price_sensitivity_k, weather_severity=weather_severity)
+    if actual_churn > max_churn_threshold:
+        feasible_candidates = df_curve[df_curve['rider_cancel_prob'] <= max_churn_threshold]
+        if not feasible_candidates.empty:
+            optimal_continuous_m = float(feasible_candidates['surge_multiplier'].max())
+        else:
+            optimal_continuous_m = 1.0
+            
     # Lookup curve statistics at optimal multiplier
     closest_idx = (np.abs(df_curve['surge_multiplier'] - optimal_continuous_m)).argmin()
     opt_row = df_curve.iloc[closest_idx]
