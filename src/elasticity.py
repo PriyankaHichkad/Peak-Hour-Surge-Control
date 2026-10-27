@@ -67,10 +67,16 @@ def solve_optimal_surge_multiplier(base_fare=15.0, price_sensitivity_k=DEFAULT_P
     multipliers = np.linspace(1.0, 3.0, 201)
     df_curve = compute_marketplace_fulfillment_curve(multipliers, base_fare, price_sensitivity_k, weather_severity, supply_demand_ratio)
     
+    baseline_churn = float(rider_cancellation_probability(1.0, price_sensitivity_k=price_sensitivity_k, weather_severity=weather_severity))
+    is_feasible = bool(baseline_churn <= max_churn_threshold)
+    feasibility_warning = None if is_feasible else f"Churn guardrail {max_churn_threshold:.1%} is infeasible even at 1.0x baseline (minimum churn is {baseline_churn:.1%})"
+    
     if supply_demand_ratio >= 1.0:
         return {
             'optimal_multiplier': 1.0,
             'continuous_scipy_m': 1.0,
+            'is_feasible': is_feasible,
+            'feasibility_warning': feasibility_warning,
             'expected_fulfillment_rate': float(df_curve.iloc[0]['fulfillment_rate']),
             'expected_rider_churn': float(df_curve.iloc[0]['rider_cancel_prob']),
             'expected_driver_acceptance': float(df_curve.iloc[0]['driver_accept_prob']),
@@ -98,13 +104,18 @@ def solve_optimal_surge_multiplier(base_fare=15.0, price_sensitivity_k=DEFAULT_P
     optimal_continuous_m = round(float(scipy_res.x), 2)
     
     # Hard post-optimization feasibility check for rider cancellation guardrail
+    is_feasible = True
+    feasibility_warning = None
     actual_churn = rider_cancellation_probability(optimal_continuous_m, price_sensitivity_k=price_sensitivity_k, weather_severity=weather_severity)
     if actual_churn > max_churn_threshold:
         feasible_candidates = df_curve[df_curve['rider_cancel_prob'] <= max_churn_threshold]
         if not feasible_candidates.empty:
             optimal_continuous_m = float(feasible_candidates['surge_multiplier'].max())
         else:
+            baseline_churn = rider_cancellation_probability(1.0, price_sensitivity_k=price_sensitivity_k, weather_severity=weather_severity)
             optimal_continuous_m = 1.0
+            is_feasible = False
+            feasibility_warning = f"Churn guardrail {max_churn_threshold:.1%} is infeasible even at 1.0x baseline (minimum churn is {baseline_churn:.1%})"
             
     # Lookup curve statistics at optimal multiplier
     closest_idx = (np.abs(df_curve['surge_multiplier'] - optimal_continuous_m)).argmin()
@@ -113,6 +124,8 @@ def solve_optimal_surge_multiplier(base_fare=15.0, price_sensitivity_k=DEFAULT_P
     return {
         'optimal_multiplier': optimal_continuous_m,
         'continuous_scipy_m': optimal_continuous_m,
+        'is_feasible': is_feasible,
+        'feasibility_warning': feasibility_warning,
         'expected_fulfillment_rate': float(opt_row['fulfillment_rate']),
         'expected_rider_churn': float(opt_row['rider_cancel_prob']),
         'expected_driver_acceptance': float(opt_row['driver_accept_prob']),

@@ -234,7 +234,8 @@ def benchmark_forecasting_models(df_telemetry, train_days=5):
             })
             p_preds = m.predict(prophet_test)
             y_prophet = np.maximum(0, np.round(p_preds['yhat'].values))
-            method_desc = 'Additive Seasonality + Exogenous Regressors (Meta Prophet)'
+            prophet_model_label = 'Meta Prophet (Genuine Exogenous Regressors)'
+            method_desc = 'Additive Seasonality + Exogenous Regressors (Meta Prophet Genuine)'
         except Exception:
             HAS_PROPHET_RUNTIME = False
         else:
@@ -257,12 +258,13 @@ def benchmark_forecasting_models(df_telemetry, train_days=5):
         prophet_surrogate = Ridge(alpha=0.5)
         prophet_surrogate.fit(train_hourly[fourier_cols], train_hourly['actual_demand'])
         y_prophet = np.maximum(0, np.round(prophet_surrogate.predict(test_hourly[fourier_cols])))
-        method_desc = 'Additive Decomposed Harmonics + Exogenous Regressors'
+        prophet_model_label = 'Fourier Additive Surrogate (Prophet Fallback)'
+        method_desc = 'Additive Fourier Harmonics + Exogenous Regressors (Prophet Architecture Surrogate)'
     
     benchmark_models = [
-        ('Seasonal Naïve (Lag-24)', y_naive, 'None (Univariate)', '24-Hour Diurnal Lag Persistence Baseline'),
+        ('Seasonal Naïve (Lag-24)', y_naive, 'None (Univariate)', 'Rolling 1-Step 24h Diurnal Lag Persistence Baseline'),
         ('Cyclic Ridge Regression', y_ridge, 'Included (Severity + Precip)', 'L2 Regularized Cyclic Feature Regression'),
-        ('Meta Prophet (Exogenous Regressors)', y_prophet, 'Included (Severity + Precip)', method_desc)
+        (prophet_model_label, y_prophet, 'Included (Severity + Precip)', method_desc)
     ]
     
     results = []

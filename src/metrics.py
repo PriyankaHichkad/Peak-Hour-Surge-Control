@@ -8,7 +8,7 @@ def enforce_fleet_capacity(df, trips_per_driver_hour=2.5):
     Excess unfulfilled demand beyond driver fleet throughput cannot be fulfilled.
     """
     df = df.copy()
-    if 'hourly_active_drivers' not in df.columns or len(df) == 0:
+    if 'hourly_active_drivers' not in df.columns or 'fulfilled' not in df.columns or len(df) == 0:
         return df
         
     if 'timestamp' in df.columns:
@@ -95,8 +95,33 @@ def compare_baseline_vs_optimized(df_raw, opt_surge_multiplier, price_sensitivit
     with symmetric driver fleet capacity constraints.
     Supports both global scalar multiplier and Series of per-cluster multipliers.
     """
+    df_base = df_raw.copy()
+    if 'fulfilled' not in df_base.columns:
+        from src.elasticity import rider_cancellation_probability, driver_acceptance_probability
+        base_m = df_base['initial_surge_multiplier'] if 'initial_surge_multiplier' in df_base.columns else 1.00
+        df_base['initial_surge_multiplier'] = base_m
+        if isinstance(base_m, (pd.Series, np.ndarray, list)):
+            p_cancel_b = df_base.apply(lambda r: rider_cancellation_probability(r['initial_surge_multiplier'], price_sensitivity_k=price_sensitivity_k, weather_severity=r.get('weather_severity', 0.0)), axis=1)
+            p_accept_b = df_base['initial_surge_multiplier'].apply(driver_acceptance_probability)
+        else:
+            p_cancel_b = rider_cancellation_probability(base_m, price_sensitivity_k=price_sensitivity_k, weather_severity=df_base['weather_severity'].mean() if 'weather_severity' in df_base else 0.0)
+            p_accept_b = driver_acceptance_probability(base_m)
+            
+        np.random.seed(42)
+        if isinstance(p_cancel_b, (pd.Series, np.ndarray)):
+            df_base['rider_cancelled'] = np.random.binomial(1, p_cancel_b) == 1
+        else:
+            df_base['rider_cancelled'] = np.random.binomial(1, p_cancel_b, len(df_base)) == 1
+            
+        if isinstance(p_accept_b, (pd.Series, np.ndarray)):
+            df_base['driver_accepted'] = np.random.binomial(1, p_accept_b) == 1
+        else:
+            df_base['driver_accepted'] = np.random.binomial(1, p_accept_b, len(df_base)) == 1
+            
+        df_base['fulfilled'] = (~df_base['rider_cancelled']) & df_base['driver_accepted']
+        
     # Symmetrically enforce physical driver fleet throughput on baseline
-    df_base = enforce_fleet_capacity(df_raw)
+    df_base = enforce_fleet_capacity(df_base)
     baseline_kpis = calculate_marketplace_kpis(df_base)
     
     df_opt = df_raw.copy()
